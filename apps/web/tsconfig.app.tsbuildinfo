@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/api.ts","./src/auth.tsx","./src/components.tsx","./src/main.tsx","./src/pages/admininbox.tsx","./src/school/dashboard.tsx","./src/school/home.tsx","./src/school/mealcalendar.tsx","./src/school/pickups.tsx","./src/school/schoolsettings.tsx","./src/school/schoolshell.tsx"],"version":"5.9.3"}
