@@ -19,7 +19,7 @@
   --danger-soft: #f8e7e4;
   --shadow: 0 24px 70px rgba(48, 83, 70, 0.1);
   --focus: #147a64;
-  --app-gradient: radial-gradient(circle at 16% 8%, rgba(191, 239, 218, .72), transparent 34%), linear-gradient(135deg, #eef9f3 0%, #f8fcfa 52%, #e4f4ec 100%);
+  --app-gradient: radial-gradient(circle at 12% 16%, #bfebdd 0%, #e7f7f1 42%, rgba(231, 247, 241, .72) 62%, transparent 78%), radial-gradient(circle at 4% 58%, rgba(191, 235, 221, .58) 0%, rgba(231, 247, 241, .48) 38%, transparent 68%), #fafcfb;
 }
 
 :root[data-theme="dark"] {
