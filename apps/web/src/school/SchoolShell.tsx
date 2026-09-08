@@ -16,7 +16,7 @@ const nav = [
   { to: '/settings', label: 'Settings', icon: Settings }
 ];
 
-export function SchoolShell({ account, onLogout }: { account: Account; onLogout: () => void }) {
+export function SchoolShell({ account, onAccountChanged, onLogout }: { account: Account; onAccountChanged: (account: Account) => void; onLogout: () => void }) {
   return <div className="app-layout">
     <aside className="nav-rail">
       <nav>{nav.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} aria-label={label}><Icon size={19} /><span>{label}</span></NavLink>)}</nav>
@@ -24,7 +24,7 @@ export function SchoolShell({ account, onLogout }: { account: Account; onLogout:
     </aside>
     <div className="app-stage">
       <header className="app-header"><div className="app-header__actions"><button className="icon-button" aria-label="Notifications"><Bell size={18} /></button><ThemeButton /></div></header>
-      <Routes><Route path="/home" element={<Home />} /><Route path="/tracker" element={<Dashboard account={account} />} /><Route path="/dashboard" element={<Navigate to="/tracker" replace />} /><Route path="/calendar" element={<MealCalendar />} /><Route path="/pickups" element={<Pickups />} /><Route path="/settings" element={<SchoolSettings account={account} onLogout={onLogout} />} /><Route path="*" element={<Navigate to="/home" replace />} /></Routes>
+      <Routes><Route path="/home" element={<Home />} /><Route path="/tracker" element={<Dashboard account={account} />} /><Route path="/dashboard" element={<Navigate to="/tracker" replace />} /><Route path="/calendar" element={<MealCalendar />} /><Route path="/pickups" element={<Pickups />} /><Route path="/settings" element={<SchoolSettings account={account} onAccountChanged={onAccountChanged} onLogout={onLogout} />} /><Route path="*" element={<Navigate to="/home" replace />} /></Routes>
     </div>
     <nav className="mobile-nav" aria-label="Primary navigation">{nav.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to}><Icon size={20} /><span>{label === 'Meal calendar' ? 'Calendar' : label}</span></NavLink>)}</nav>
   </div>;

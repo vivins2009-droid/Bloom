@@ -3,7 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import type { Account } from '@bloom/contracts';
 import { api } from './api';
 import { AuthPage, ChangePassphrase } from './auth';
-import { AdminInbox } from './pages/AdminInbox';
+import { AdminPortal } from './admin/AdminPortal';
 import { SchoolShell } from './school/SchoolShell';
 import { Spinner } from './components';
 
@@ -15,11 +15,11 @@ export function App() {
   if (account === undefined) return <main className="center-screen"><Spinner label="Opening your workspace" /></main>;
   if (!account) return <AuthPage onAuthenticated={setAccount} />;
   if (account.firstLogin) return <ChangePassphrase account={account} onChanged={setAccount} />;
-  if (account.role === 'ADMIN') return <AdminInbox account={account} onLogout={logout} />;
-  if (account.role !== 'SCHOOL') return <DeferredPortal account={account} onLogout={logout} />;
+  if (account.role === 'ADMIN') return <AdminPortal account={account} onLogout={logout} />;
+  if (account.role !== 'FOOD_PROVIDER') return <DeferredPortal account={account} onLogout={logout} />;
 
   return <BrowserRouter><Routes>
-    <Route path="/*" element={<SchoolShell account={account} onLogout={logout} />} />
+    <Route path="/*" element={<SchoolShell account={account} onAccountChanged={setAccount} onLogout={logout} />} />
     <Route path="*" element={<Navigate to="/home" replace />} />
   </Routes></BrowserRouter>;
 }

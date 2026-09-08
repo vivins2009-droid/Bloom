@@ -1,6 +1,6 @@
 import { ArrowLeft, ArrowRight, CheckCircle2, Eye, EyeOff, Leaf, Moon, Sun } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
-import type { Account, AccountRole } from '@bloom/contracts';
+import type { Account, OrganizationType, PublicAccountRole } from '@bloom/contracts';
 import { api } from './api';
 import { Field, Notice, SelectField } from './components';
 
@@ -52,9 +52,13 @@ function SignIn({ onAuthenticated }: { onAuthenticated: (account: Account) => vo
 }
 
 function RequestAccess({ onBack }: { onBack: () => void }) {
-  const [form, setForm] = useState({ applicantName: '', role: 'SCHOOL' as Exclude<AccountRole, 'ADMIN'>, organizationName: '', contact: '', note: '' });
+  const [form, setForm] = useState({ applicantName: '', role: 'FOOD_PROVIDER' as PublicAccountRole, organizationTypeId: '', organizationName: '', contact: '', note: '' });
+  const [types, setTypes] = useState<OrganizationType[]>([]); const [loadingTypes, setLoadingTypes] = useState(true);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [sent, setSent] = useState(false);
+  const loadTypes = () => { setLoadingTypes(true); setError(''); api<{ data: OrganizationType[] }>('/organization-types').then(({ data }) => { setTypes(data); setForm((current) => ({ ...current, organizationTypeId: data.find((item) => item.role === current.role)?.id ?? '' })); }).catch((reason) => setError(reason instanceof Error ? reason.message : 'Signup options could not be loaded.')).finally(() => setLoadingTypes(false)); };
+  useEffect(loadTypes, []);
   const change = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  const changeRole = (role: PublicAccountRole) => setForm((current) => ({ ...current, role, organizationTypeId: types.find((item) => item.role === role)?.id ?? '' }));
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError('');
     try { await api('/access-requests', { method: 'POST', body: JSON.stringify(form) }); setSent(true); }
@@ -64,12 +68,13 @@ function RequestAccess({ onBack }: { onBack: () => void }) {
   if (sent) return <div className="auth-success"><CheckCircle2 size={34} /><p className="eyebrow">Request received</p><h2>Your request is with the district team.</h2><p>An administrator will review your organization and contact you with an access code and one-time passphrase.</p><button className="button button--quiet" onClick={onBack}><ArrowLeft size={16} /> Return to sign in</button></div>;
   return <form className="auth-form" onSubmit={submit}>
     <header><p className="eyebrow">Join the network</p><h2>Request an account</h2><p>Tell the district team who you are. Operational details come after approval.</p></header>
-    {error && <Notice tone="error">{error}</Notice>}
-    <div className="field-grid"><Field label="Your name"><input value={form.applicantName} onChange={(e) => change('applicantName', e.target.value)} required /></Field><Field label="Account type"><SelectField value={form.role} onChange={(e) => change('role', e.target.value)} aria-label="Account type"><option value="SCHOOL">School</option><option value="FARMER_COLLECTOR">Farmer / Collector</option><option value="COMPOSTER">Composter</option></SelectField></Field></div>
-    <Field label="School or organization"><input value={form.organizationName} onChange={(e) => change('organizationName', e.target.value)} required /></Field>
+    {error && <Notice tone="error">{error} {loadingTypes ? null : <button type="button" className="notice-link" onClick={loadTypes}>Try again</button>}</Notice>}
+    <div className="field-grid"><Field label="Your name"><input value={form.applicantName} onChange={(e) => change('applicantName', e.target.value)} required /></Field><Field label="Account role"><SelectField value={form.role} onChange={(e) => changeRole(e.target.value as PublicAccountRole)} aria-label="Account role">{([['FOOD_PROVIDER', 'Food provider'], ['FARMER_COLLECTOR', 'Farmer / Collector'], ['COMPOSTER', 'Composter']] as const).map(([value, label]) => <option key={value} value={value}>{label}{!loadingTypes && !types.some((item) => item.role === value) ? ' — not accepting requests' : ''}</option>)}</SelectField></Field></div>
+    <Field label="Organization type"><SelectField value={form.organizationTypeId} onChange={(e) => change('organizationTypeId', e.target.value)} aria-label="Organization type" disabled={loadingTypes || !types.some((item) => item.role === form.role)} required><option value="">{loadingTypes ? 'Loading options…' : 'Choose an organization type'}</option>{types.filter((item) => item.role === form.role).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</SelectField></Field>
+    <Field label="Organization"><input value={form.organizationName} onChange={(e) => change('organizationName', e.target.value)} required /></Field>
     <Field label="Email or phone" hint="The administrator will use this to return your credentials."><input value={form.contact} onChange={(e) => change('contact', e.target.value)} required /></Field>
     <Field label="Note (optional)"><textarea rows={3} value={form.note} onChange={(e) => change('note', e.target.value)} placeholder="Anything the district team should know" /></Field>
-    <button className="button button--primary button--wide" disabled={busy}>{busy && <i className="button-spinner" />}{busy ? 'Sending request' : 'Request access'}<ArrowRight size={17} /></button>
+    <button className="button button--primary button--wide" disabled={busy || loadingTypes || !form.organizationTypeId}>{busy && <i className="button-spinner" />}{busy ? 'Sending request' : 'Request access'}<ArrowRight size={17} /></button>
   </form>;
 }
 

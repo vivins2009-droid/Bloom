@@ -3,7 +3,7 @@ import { calculateInsights, calculateRecommendation, recurrenceDates } from './d
 import type { DailyWasteLog, Meal } from '@bloom/contracts';
 
 const log = (date: string, prepared: number, attendance: number, leftoverKg = 5): DailyWasteLog => ({
-  id: date, schoolId: 's1', date, mealIds: ['m1'], actualAttendance: attendance, servingsPrepared: prepared,
+  id: date, providerId: 's1', date, mealIds: ['m1'], actualAttendance: attendance, servingsPrepared: prepared,
   leftoverKg, reason: 'OVERPRODUCTION', suitableForCollection: true, notes: '', createdAt: `${date}T10:00:00Z`
 });
 
@@ -19,7 +19,7 @@ describe('school domain', () => {
   });
 
   it('calculates insights only from recorded logs', () => {
-    const meals: Meal[] = [{ id: 'm1', schoolId: 's1', name: 'Tomato rice', createdAt: '2026-09-01' }];
+    const meals: Meal[] = [{ id: 'm1', providerId: 's1', name: 'Tomato rice', createdAt: '2026-09-01' }];
     const insights = calculateInsights([log('2026-09-01', 110, 100, 8)], meals, new Date('2026-09-07'));
     expect(insights.leftoverPer100Attendees).toBe(8);
     expect(insights.topMeals[0].name).toBe('Tomato rice');

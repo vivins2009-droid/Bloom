@@ -2,13 +2,13 @@
 
 # Bloom V2
 
-**Plan school meals, track leftovers, and coordinate food recovery**
+**Plan food service, track leftovers, and coordinate local recovery**
 
 Use one responsive workspace to prepare closer to demand and move suitable surplus toward collection.
 
 </div>
 
-Bloom V2 is the current school-first rebuild of Bloom. It is an active phase-one application, not the final product. The school workflow and access approval system work locally today, while the recovery-partner portals and broader admin analytics remain intentionally limited.
+Bloom V2 is the current food-provider-first rebuild of Bloom. It is an active application, not the final product. The food-provider workflow and administrator operations console work locally today, while recovery-partner portals remain intentionally deferred.
 
 ## Install
 
@@ -35,22 +35,33 @@ Use either local demo account:
 
 ## What works today
 
-- **Request access:** schools, farmer/collectors, and composters can submit an account request without selecting an administrator role.
-- **Review applicants:** administrators can approve or reject requests and reveal a generated access code and one-time passphrase.
+- **Request access:** food providers, farmer/collectors, and composters choose an administrator-managed organization type and submit an account request without exposing the administrator role.
+- **Operate the network:** administrators review applicants, manage organization types, control account access, oversee pickup exceptions, and inspect a visible audit record.
+- **Issue credentials safely:** approval, manual account creation, and passphrase resets reveal a generated access code and one-time passphrase once.
 - **Sign in securely:** approved accounts use role-based sessions and must replace their one-time passphrase after the first sign-in.
 - **Plan servings:** school operators enter attendance, service date, and meal to receive a transparent serving recommendation.
 - **Manage meals:** schools maintain a searchable meal library and assign multiple meals to calendar dates.
 - **Repeat schedules:** meal assignments can run once, weekly, or every two weeks with an optional end date.
-- **Record leftovers:** schools log attendance, servings prepared, leftover weight, cause, collection suitability, and notes.
-- **Correct records:** waste logs can be edited or deleted until a recovery partner accepts the related pickup.
+- **Record each service:** schools can save more than one waste log on the same date, so a second service or a corrected operational count does not overwrite another record.
+- **Correct records:** each waste log can be edited or deleted independently until a recovery partner accepts its related pickup.
 - **Publish pickups:** suitable leftovers can be published separately from the daily log and tracked through the collection lifecycle.
 - **Use recorded insights:** the tracker calculates leftovers per 100 attendees, meal and cause breakdowns, and a 30-day trend once enough dated records exist.
+- **Manage account details:** organization users can update the account-holder name and change their passphrase from Settings.
+- **Request organization-name changes:** organization users submit a named change request; an administrator approves or rejects it before the account is updated.
 
-## School workspace
+## Food-provider workspace
 
 The Home page flows directly into a source-backed Dashboard overview. Its three preview cards show today's waste-log state, the next scheduled service, and the active pickup state before linking to the full workspace.
 
-The detailed Waste tracker keeps the serving calculator, daily waste uploader, pickup publishing action, and recorded-data insights together. Meal calendar and Pickups remain separate focused workspaces. The interface supports light and dark themes, responsive layouts, keyboard navigation, and in-app confirmation dialogs.
+The detailed Waste tracker keeps the serving calculator, daily waste uploader, pickup publishing action, and recorded-data insights together. Meal calendar and Pickups remain separate focused workspaces. Schools use this workflow today; later food-provider variants will adapt its language and operational details.
+
+## Administrator workspace
+
+The administrator Home page prioritizes pending access decisions, active organizations, pickup exceptions, confirmed 30-day recovery, and recent activity. Requests, Organizations, Pickups, Activity, and Settings are focused workspaces rather than simulated analytics panels.
+
+Administrators can add, rename, reorder, enable, archive, or remove signup organization types. Changes appear on the public request form immediately. They can also create accounts manually, change an account subtype, suspend or reactivate access, reset one-time credentials, and cancel, expire, or reopen eligible pickups with a required recorded reason.
+
+Organization-name requests appear alongside access requests in the administrator Requests workspace and become part of the audit history. Email and phone editing remain read-only for now because contact verification and delivery are not yet configured.
 
 ## Access and data
 
@@ -67,9 +78,9 @@ Passphrases are hashed. Sessions use HTTP-only cookies, expire automatically, an
 
 ## Current scope
 
-- **Available now:** school Home, Dashboard overview, Waste tracker, Meal calendar, Pickups, Settings, authentication, access requests, and the administrator approval inbox.
+- **Available now:** food-provider Home, Dashboard overview, Waste tracker, Meal calendar, Pickups, Settings, authentication, dynamic access requests, and the administrator operations console.
 - **Still limited:** farmer/collector and composter accounts can sign in, but their operational portals are deferred.
-- **Still deferred:** automatic credential delivery, Capacitor packaging, and verified admin analytics beyond access approval.
+- **Still deferred:** automatic credential delivery, Capacitor packaging, recovery-partner portals, maps, exports, SMS integrations, and deeper administrative analytics.
 - **Not fabricated:** sparse datasets show an onboarding state instead of hard-coded trends, monetary claims, diversion figures, or reliability scores.
 
 ## License
