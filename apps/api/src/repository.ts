@@ -6,7 +6,7 @@ import type { AccessRequest, Account, AdminAuditEvent, DailyWasteLog, Meal, Meal
 
 export interface StoredAccount extends Account { passphraseHash: string }
 export interface Database {
-  schemaVersion: 2;
+  schemaVersion: 3;
   accounts: StoredAccount[];
   accessRequests: AccessRequest[];
   organizationNameRequests: OrganizationNameChangeRequest[];
@@ -59,9 +59,9 @@ export const seededOrganizationTypes = (): OrganizationType[] => typeSeeds.map((
 const seedDatabase = (): Database => {
   const providerId = 'acct-school-demo';
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     accounts: [
-      { id: providerId, role: 'FOOD_PROVIDER', accessCode: 'SCH-DEMO', passphraseHash: hashPassphrase('bloom-school'), displayName: 'Ananya Rao', organizationName: 'Coimbatore Government School', contact: 'ananya@example.org', organizationTypeId: 'type-public-school', status: 'ACTIVE', firstLogin: false, createdAt: stamp },
+      { id: providerId, role: 'FOOD_PROVIDER', accessCode: 'SCH-DEMO', passphraseHash: hashPassphrase('bloom-school'), displayName: 'Ananya Rao', organizationName: 'Coimbatore Government School', contact: 'ananya@example.org', organizationTypeId: 'type-public-school', status: 'ACTIVE', firstLogin: false, locality: 'Coimbatore', collectionAddress: '12 School Road, Coimbatore, Tamil Nadu 641001', collectionInstructions: 'Use the kitchen service entrance and ask for the food service lead.', createdAt: stamp },
       { id: 'acct-admin', role: 'ADMIN', accessCode: 'ADMIN-BLOOM', passphraseHash: hashPassphrase('bloom-admin'), displayName: 'District Administrator', organizationName: 'Coimbatore Food Recovery Office', contact: 'admin@example.org', status: 'ACTIVE', firstLogin: false, createdAt: stamp }
     ],
     accessRequests: [
@@ -81,6 +81,14 @@ const seedDatabase = (): Database => {
   };
 };
 
+const ensureLocalRecoveryDemos = (database: Database) => {
+  const localDemos: Array<Pick<StoredAccount, 'id' | 'role' | 'accessCode' | 'displayName' | 'organizationName' | 'contact' | 'organizationTypeId'>> = [
+    { id: 'acct-farmer-demo', role: 'FARMER_COLLECTOR', accessCode: 'FCL-DEMO', displayName: 'Karthik Mani', organizationName: 'Coimbatore Recovery Collective', contact: 'collector@example.org', organizationTypeId: 'type-independent-collector' },
+    { id: 'acct-composter-demo', role: 'COMPOSTER', accessCode: 'CMP-DEMO', displayName: 'Meera Das', organizationName: 'Noyyal Community Compost', contact: 'compost@example.org', organizationTypeId: 'type-community-composter' }
+  ];
+  for (const demo of localDemos) if (!database.accounts.some((account) => account.id === demo.id || account.accessCode === demo.accessCode)) database.accounts.push({ ...demo, passphraseHash: hashPassphrase('bloom-recovery'), status: 'ACTIVE', firstLogin: false, createdAt: stamp });
+};
+
 export function normalizeDatabase(input: any): Database {
   const raw = input ?? {};
   const organizationTypes: OrganizationType[] = Array.isArray(raw.organizationTypes) && raw.organizationTypes.length
@@ -90,13 +98,22 @@ export function normalizeDatabase(input: any): Database {
   const defaultType = (role: PublicAccountRole) => role === 'FOOD_PROVIDER' ? 'type-public-school' : role === 'FARMER_COLLECTOR' ? 'type-independent-collector' : 'type-community-composter';
   const typeName = (id: string) => organizationTypes.find((type) => type.id === id)?.name ?? 'Organization';
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     organizationTypes,
     auditEvents: Array.isArray(raw.auditEvents) ? raw.auditEvents : [],
     organizationNameRequests: Array.isArray(raw.organizationNameRequests) ? raw.organizationNameRequests : [],
     accounts: (raw.accounts ?? []).map((account: any) => {
       const role = migrateRole(account.role) as Account['role'];
-      return { ...account, role, contact: account.contact ?? '', status: account.status ?? 'ACTIVE', organizationTypeId: role === 'ADMIN' ? undefined : account.organizationTypeId ?? defaultType(role as PublicAccountRole) };
+      return {
+        ...account,
+        role,
+        contact: account.contact ?? '',
+        status: account.status ?? 'ACTIVE',
+        organizationTypeId: role === 'ADMIN' ? undefined : account.organizationTypeId ?? defaultType(role as PublicAccountRole),
+        locality: role === 'FOOD_PROVIDER' ? account.locality ?? '' : undefined,
+        collectionAddress: role === 'FOOD_PROVIDER' ? account.collectionAddress ?? '' : undefined,
+        collectionInstructions: role === 'FOOD_PROVIDER' ? account.collectionInstructions ?? '' : undefined
+      };
     }),
     accessRequests: (raw.accessRequests ?? []).map((request: any) => {
       const role = migrateRole(request.role) as PublicAccountRole;
@@ -106,7 +123,23 @@ export function normalizeDatabase(input: any): Database {
     meals: (raw.meals ?? []).map(({ schoolId, ...meal }: any) => ({ ...meal, providerId: meal.providerId ?? schoolId })),
     assignments: (raw.assignments ?? []).map(({ schoolId, ...assignment }: any) => ({ ...assignment, providerId: assignment.providerId ?? schoolId })),
     logs: (raw.logs ?? []).map(({ schoolId, ...log }: any) => ({ ...log, providerId: log.providerId ?? schoolId })),
-    pickups: (raw.pickups ?? []).map(({ schoolId, ...pickup }: any) => ({ ...pickup, providerId: pickup.providerId ?? schoolId, status: pickup.status === 'AWAITING_SCHOOL_CONFIRMATION' ? 'AWAITING_PROVIDER_CONFIRMATION' : pickup.status }))
+    pickups: (raw.pickups ?? []).map(({ schoolId, destination: _destination, expiresAt, ...pickup }: any) => {
+      const providerId = pickup.providerId ?? schoolId;
+      const provider = (raw.accounts ?? []).find((account: any) => account.id === providerId);
+      return {
+        ...pickup,
+        providerId,
+        providerName: pickup.providerName ?? provider?.organizationName ?? 'Food Provider',
+        eligibleRoles: pickup.eligibleRoles?.length ? pickup.eligibleRoles : ['FARMER_COLLECTOR', 'COMPOSTER'],
+        status: pickup.status === 'AWAITING_SCHOOL_CONFIRMATION' ? 'AWAITING_PROVIDER_CONFIRMATION' : pickup.status,
+        availableFrom: pickup.availableFrom ?? pickup.createdAt,
+        pickupDeadline: pickup.pickupDeadline ?? expiresAt ?? new Date(new Date(pickup.createdAt).getTime() + 12 * 60 * 60 * 1000).toISOString(),
+        locality: pickup.locality ?? provider?.locality ?? '',
+        collectionAddress: pickup.collectionAddress ?? provider?.collectionAddress ?? '',
+        collectionInstructions: pickup.collectionInstructions ?? provider?.collectionInstructions ?? '',
+        activity: Array.isArray(pickup.activity) ? pickup.activity : []
+      };
+    })
   };
 }
 
@@ -130,7 +163,8 @@ export class FileRepository implements Repository {
     await this.ensure();
     const raw = JSON.parse(await readFile(this.filePath, 'utf8'));
     const database = normalizeDatabase(raw);
-    if (raw.schemaVersion !== 2) await this.write(database);
+    ensureLocalRecoveryDemos(database);
+    if (raw.schemaVersion !== 3 || database.accounts.length !== (raw.accounts ?? []).length) await this.write(database);
     return database;
   }
 
@@ -164,7 +198,7 @@ export class PostgresRepository implements Repository {
       await client.query('BEGIN');
       const result = await client.query<{ document: unknown }>('SELECT document FROM bloom_state WHERE id = 1 FOR UPDATE');
       const raw = result.rows[0].document as any;
-      if (raw.schemaVersion !== 2) await client.query('UPDATE bloom_state SET document = $1::jsonb, updated_at = NOW() WHERE id = 1', [JSON.stringify(normalizeDatabase(raw))]);
+      if (raw.schemaVersion !== 3) await client.query('UPDATE bloom_state SET document = $1::jsonb, updated_at = NOW() WHERE id = 1', [JSON.stringify(normalizeDatabase(raw))]);
       await client.query('COMMIT');
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }

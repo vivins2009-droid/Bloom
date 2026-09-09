@@ -76,7 +76,7 @@ function AdminHome({ account }: { account: Account }) {
   const metrics = [
     { label: 'Requests waiting', value: overview!.pendingRequests + overview!.pendingNameChanges, to: '/admin/requests', note: `${overview!.pendingRequests} access · ${overview!.pendingNameChanges} name change` },
     { label: 'Active organizations', value: overview!.activeOrganizations, to: '/admin/organizations', note: 'Accounts currently able to sign in' },
-    { label: 'Pickup exceptions', value: overview!.pickupExceptions, to: '/admin/pickups', note: overview!.pickupExceptions ? 'Cancelled or expired pickups' : 'No exceptions need review' },
+    { label: 'Pickup exceptions', value: overview!.pickupExceptions, to: '/admin/pickups', note: overview!.pickupExceptions ? 'Cancelled, expired, or overdue in transit' : 'No exceptions need review' },
     { label: 'Collected in 30 days', value: `${overview!.collectedKgLast30Days.toLocaleString()} kg`, to: '/admin/pickups', note: 'Confirmed recovery, not an estimate' }
   ];
   return <main className="admin-page admin-home">
@@ -157,11 +157,14 @@ function AdminPickups() {
   const [pickups, setPickups] = useState<Pickup[]>([]); const [accounts, setAccounts] = useState<Account[]>([]); const [error, setError] = useState(''); const [loading, setLoading] = useState(true); const [selected, setSelected] = useState<{ pickup: Pickup; action: 'CANCEL' | 'EXPIRE' | 'REOPEN' } | null>(null);
   const load = () => { setLoading(true); Promise.all([api<{ data: Pickup[] }>('/pickups'), api<{ data: Account[] }>('/admin/accounts')]).then(([p, a]) => { setPickups(p.data); setAccounts(a.data); setError(''); }).catch((reason) => setError(reason.message)).finally(() => setLoading(false)); };
   useEffect(load, []);
-  const exceptions = pickups.filter((item) => ['CANCELLED', 'EXPIRED'].includes(item.status)); const active = pickups.filter((item) => !['CANCELLED', 'EXPIRED', 'COLLECTED'].includes(item.status)); const collected = pickups.filter((item) => item.status === 'COLLECTED');
+  const overdueInTransit = (item: Pickup) => item.status === 'IN_TRANSIT' && new Date(item.pickupDeadline).getTime() < Date.now();
+  const exceptions = pickups.filter((item) => ['CANCELLED', 'EXPIRED'].includes(item.status) || overdueInTransit(item));
+  const active = pickups.filter((item) => !['CANCELLED', 'EXPIRED', 'COLLECTED'].includes(item.status) && !overdueInTransit(item));
+  const collected = pickups.filter((item) => item.status === 'COLLECTED');
   const provider = (id: string) => accounts.find((item) => item.id === id)?.organizationName ?? 'Unknown provider';
   const override = async (reason: string) => { if (!selected) return; await api(`/admin/pickups/${selected.pickup.id}/override`, { method: 'POST', body: JSON.stringify({ action: selected.action, reason }) }); setSelected(null); load(); };
   return <main className="admin-page"><PageHeading index="04" eyebrow="Recovery oversight" title="Pickups" description="Monitor the collection record and intervene only when an exception needs an administrator." />{error && <Notice tone="error">{error}</Notice>}{loading ? <Spinner label="Loading pickups" /> : <>
-    <PickupGroup title="Needs review" note="Cancelled and expired" pickups={exceptions} provider={provider} onAction={setSelected} />
+    <PickupGroup title="Needs review" note="Cancelled, expired, or overdue in transit" pickups={exceptions} provider={provider} onAction={setSelected} />
     <PickupGroup title="Active movement" note="Available through confirmation" pickups={active} provider={provider} onAction={setSelected} />
     <PickupGroup title="Confirmed history" note="Collected" pickups={collected} provider={provider} onAction={setSelected} compact />
   </>}

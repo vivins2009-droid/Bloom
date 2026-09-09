@@ -17,7 +17,7 @@ export function AuthPage({ onAuthenticated }: { onAuthenticated: (account: Accou
   return <main className="auth-page">
     <div className="auth-top"><a className="wordmark" href="/"><span className="brand-mark">b</span><span>Bloom</span></a><ThemeButton /></div>
     <section className="auth-story">
-      <p className="eyebrow">School food, thoughtfully managed</p>
+      <p className="eyebrow">Food service, thoughtfully managed</p>
       <h1>Bloom</h1>
       <p>Plan every service with confidence, understand what comes back, and connect useful surplus with local recovery partners.</p>
       <div className="auth-flow" aria-label="Bloom workflow"><span>Plan</span><i /><span>Record</span><i /><span>Recover</span></div>

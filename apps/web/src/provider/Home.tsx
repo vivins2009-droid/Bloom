@@ -16,8 +16,8 @@ export function Home() {
   const activePickup = overview?.pickups.find((item) => activePickupStatuses.includes(item.status));
   return <main className="home-page">
     <section className="home-hero">
-      <div><p className="eyebrow">School food planning</p><h1 className="home-wordmark">Bloom</h1><p>Plan portions, record what comes back, and offer suitable leftovers for collection—all from one clear workflow.</p><a className="button button--primary" href="#dashboard-overview">View dashboard <ArrowDown size={17} /></a></div>
-      <div className="home-flow" aria-label="Bloom school workflow"><span><b>01</b>Plan servings</span><i /><span><b>02</b>Record leftovers</span><i /><span><b>03</b>Publish pickup</span></div>
+      <div><p className="eyebrow">Food service, thoughtfully managed</p><h1 className="home-wordmark">Bloom</h1><p>Plan portions, record what comes back, and offer suitable leftovers for collection—all from one clear workflow.</p><a className="button button--primary" href="#dashboard-overview">View dashboard <ArrowDown size={17} /></a></div>
+      <div className="home-flow" aria-label="Bloom food service workflow"><span><b>01</b>Plan servings</span><i /><span><b>02</b>Record leftovers</span><i /><span><b>03</b>Publish pickup</span></div>
     </section>
     <section className="home-dashboard" id="dashboard-overview">
       <header><div><p className="eyebrow">Workspace overview</p><h2>Dashboard</h2></div><p>See what needs attention, then open the right workspace.</p></header>

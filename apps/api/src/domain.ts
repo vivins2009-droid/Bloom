@@ -1,4 +1,55 @@
-import type { DailyWasteLog, InsightSummary, Meal, Recommendation, WasteReason } from '@bloom/contracts';
+import type { Account, DailyWasteLog, InsightSummary, Meal, Pickup, PickupStatus, Recommendation, RecoveryRole, WasteReason } from '@bloom/contracts';
+
+export const ACTIVE_PICKUP_STATUSES: PickupStatus[] = ['RESERVED', 'IN_TRANSIT', 'AWAITING_PROVIDER_CONFIRMATION'];
+
+export const roleCanRecoverPickup = (role: Account['role'], pickup: Pickup) =>
+  (role === 'FARMER_COLLECTOR' || role === 'COMPOSTER') && pickup.eligibleRoles.includes(role as RecoveryRole);
+
+export function reconcilePickup(pickup: Pickup, now = new Date()): boolean {
+  const nowMs = now.getTime();
+  const deadlineMs = new Date(pickup.pickupDeadline).getTime();
+  if (pickup.status === 'AVAILABLE' && deadlineMs <= nowMs) {
+    pickup.activity.push({
+      id: `event-${pickup.id}-${nowMs}`,
+      actorId: 'system',
+      actorName: 'Bloom',
+      fromStatus: 'AVAILABLE',
+      toStatus: 'EXPIRED',
+      reason: 'Collection deadline passed',
+      createdAt: now.toISOString()
+    });
+    pickup.status = 'EXPIRED';
+    pickup.updatedAt = now.toISOString();
+    return true;
+  }
+  if (pickup.status === 'RESERVED') {
+    const reservationMs = pickup.reservationExpiresAt ? new Date(pickup.reservationExpiresAt).getTime() : 0;
+    if (deadlineMs <= nowMs || reservationMs <= nowMs) {
+      const nextStatus: PickupStatus = deadlineMs <= nowMs ? 'EXPIRED' : 'AVAILABLE';
+      pickup.activity.push({
+        id: `event-${pickup.id}-${nowMs}`,
+        actorId: 'system',
+        actorName: 'Bloom',
+        fromStatus: 'RESERVED',
+        toStatus: nextStatus,
+        reason: nextStatus === 'AVAILABLE' ? 'Reservation hold expired' : 'Collection deadline passed',
+        createdAt: now.toISOString()
+      });
+      pickup.status = nextStatus;
+      pickup.reservedByAccountId = undefined;
+      pickup.reservedByName = undefined;
+      pickup.reservedAt = undefined;
+      pickup.reservationExpiresAt = undefined;
+      pickup.updatedAt = now.toISOString();
+      return true;
+    }
+  }
+  return false;
+}
+
+export function reconcilePickups(pickups: Pickup[], now = new Date()): boolean {
+  return pickups.reduce((changed, pickup) => reconcilePickup(pickup, now) || changed, false);
+}
 
 export function calculateRecommendation(input: {
   expectedAttendance: number;

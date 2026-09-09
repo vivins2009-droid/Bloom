@@ -3,8 +3,8 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import type { Account, AccountRole, AccessRequest, AdminAuditAction, DailyWasteLog, MealAssignment, PickupStatus, PublicAccountRole } from '@bloom/contracts';
-import { calculateInsights, calculateRecommendation, recurrenceDates } from './domain.js';
+import type { Account, AccountRole, AccessRequest, AdminAuditAction, DailyWasteLog, MealAssignment, Pickup, PickupStatus, PublicAccountRole, RecoveryRole } from '@bloom/contracts';
+import { ACTIVE_PICKUP_STATUSES, calculateInsights, calculateRecommendation, reconcilePickups, recurrenceDates, roleCanRecoverPickup } from './domain.js';
 import { createAccessCode, createPassphrase, createRepository, hashPassphrase, verifyPassphrase, type Repository } from './repository.js';
 
 const app = express();
@@ -138,6 +138,23 @@ app.patch('/api/account/profile', authenticate, asyncRoute(async (req, res) => {
     const account = db.accounts.find((item) => item.id === req.account!.id)!;
     const previous = account.displayName; account.displayName = displayName;
     addAudit(db, req.account!, { action: 'ACCOUNT_HOLDER_UPDATED', objectType: 'ACCOUNT', objectId: account.id, objectLabel: account.organizationName, summary: `Changed account holder from ${previous} to ${displayName}.` });
+    return publicAccount(account);
+  });
+  res.json(updated);
+}));
+
+app.patch('/api/account/collection-profile', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+  const input = z.object({
+    locality: z.string().trim().min(2).max(100),
+    collectionAddress: z.string().trim().min(8).max(240),
+    collectionInstructions: z.string().trim().max(400).default('')
+  }).parse(req.body);
+  const updated = await repository.mutate((db) => {
+    const account = db.accounts.find((item) => item.id === req.account!.id)!;
+    Object.assign(account, input);
+    db.pickups.filter((pickup) => pickup.providerId === account.id && pickup.status === 'AVAILABLE' && !pickup.collectionAddress).forEach((pickup) => {
+      pickup.locality = input.locality; pickup.collectionAddress = input.collectionAddress; pickup.collectionInstructions = input.collectionInstructions; pickup.updatedAt = new Date().toISOString();
+    });
     return publicAccount(account);
   });
   res.json(updated);
@@ -283,7 +300,7 @@ app.get('/api/admin/overview', authenticate, requireRole('ADMIN'), asyncRoute(as
     pendingRequests: db.accessRequests.filter((item) => item.status === 'PENDING').length,
     pendingNameChanges: db.organizationNameRequests.filter((item) => item.status === 'PENDING').length,
     activeOrganizations: db.accounts.filter((item) => item.role !== 'ADMIN' && item.status === 'ACTIVE').length,
-    pickupExceptions: db.pickups.filter((item) => item.status === 'CANCELLED' || item.status === 'EXPIRED').length,
+    pickupExceptions: db.pickups.filter((item) => item.status === 'CANCELLED' || item.status === 'EXPIRED' || (item.status === 'IN_TRANSIT' && new Date(item.pickupDeadline).getTime() < Date.now())).length,
     collectedKgLast30Days: db.pickups.filter((item) => item.status === 'COLLECTED' && new Date(item.updatedAt).getTime() >= since).reduce((total, item) => total + item.estimatedWeightKg, 0),
     recentActivity: db.auditEvents.slice(0, 5)
   });
@@ -514,31 +531,139 @@ app.get('/api/insights', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(
 }));
 
 app.get('/api/pickups', authenticate, requireRole('FOOD_PROVIDER', 'ADMIN'), asyncRoute(async (req, res) => {
-  const db = await repository.read();
-  const data = req.account!.role === 'ADMIN' ? db.pickups : db.pickups.filter((pickup) => pickup.providerId === req.account!.id);
+  const data = await repository.mutate((db) => {
+    reconcilePickups(db.pickups);
+    return req.account!.role === 'ADMIN' ? db.pickups : db.pickups.filter((pickup) => pickup.providerId === req.account!.id);
+  });
   res.json({ data, pagination: { page: 1, pageSize: 100, totalItems: data.length, totalPages: 1 } });
 }));
 
 app.post('/api/waste-logs/:id/publish-pickup', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
-  const pickup = await repository.mutate((db) => {
+  const input = z.object({
+    eligibleRoles: z.array(z.enum(['FARMER_COLLECTOR', 'COMPOSTER'])).min(1).max(2).transform((roles) => [...new Set(roles)] as RecoveryRole[]),
+    availableFrom: z.iso.datetime(),
+    pickupDeadline: z.iso.datetime(),
+    instructions: z.string().trim().max(400).default('')
+  }).parse(req.body);
+  if (new Date(input.pickupDeadline) <= new Date(input.availableFrom) || new Date(input.pickupDeadline) <= new Date()) {
+    res.status(422).json({ error: { code: 'INVALID_PICKUP_WINDOW', message: 'The collection deadline must be after the start time and in the future.' } }); return;
+  }
+  const result = await repository.mutate((db) => {
     const log = db.logs.find((item) => item.id === req.params.id && item.providerId === req.account!.id);
-    if (!log || !log.suitableForCollection || log.pickupId) return null;
+    const provider = db.accounts.find((item) => item.id === req.account!.id)!;
+    if (!provider.collectionAddress?.trim() || !provider.locality?.trim()) return { kind: 'address' as const };
+    if (!log || !log.suitableForCollection || log.pickupId || log.leftoverKg <= 0) return { kind: 'unavailable' as const };
     const now = new Date();
-    const created = { id: randomUUID(), providerId: req.account!.id, wasteLogId: log.id, estimatedWeightKg: log.leftoverKg, destination: 'LIVESTOCK_OR_COMPOST' as const, status: 'AVAILABLE' as const, expiresAt: new Date(now.getTime() + 12 * 60 * 60 * 1000).toISOString(), createdAt: now.toISOString(), updatedAt: now.toISOString() };
-    db.pickups.push(created); log.pickupId = created.id; return created;
+    const created: Pickup = {
+      id: randomUUID(), providerId: provider.id, providerName: provider.organizationName, wasteLogId: log.id,
+      estimatedWeightKg: log.leftoverKg, eligibleRoles: input.eligibleRoles, status: 'AVAILABLE',
+      availableFrom: input.availableFrom, pickupDeadline: input.pickupDeadline,
+      locality: provider.locality, collectionAddress: provider.collectionAddress,
+      collectionInstructions: input.instructions || provider.collectionInstructions || '',
+      activity: [], createdAt: now.toISOString(), updatedAt: now.toISOString()
+    };
+    db.pickups.push(created); log.pickupId = created.id; return { kind: 'created' as const, pickup: created };
   });
-  if (!pickup) { res.status(409).json({ error: { code: 'PICKUP_NOT_AVAILABLE', message: 'This log cannot be published or already has a pickup.' } }); return; }
-  res.status(201).json(pickup);
+  if (result.kind === 'address') { res.status(422).json({ error: { code: 'COLLECTION_ADDRESS_REQUIRED', message: 'Add a collection address in Settings before publishing this pickup.' } }); return; }
+  if (result.kind === 'unavailable') { res.status(409).json({ error: { code: 'PICKUP_NOT_AVAILABLE', message: 'This log cannot be published or already has a pickup.' } }); return; }
+  res.status(201).json(result.pickup);
 }));
 
 app.post('/api/pickups/:id/confirm', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
   const pickup = await repository.mutate((db) => {
+    reconcilePickups(db.pickups);
     const item = db.pickups.find((entry) => entry.id === req.params.id && entry.providerId === req.account!.id);
     if (!item || item.status !== 'AWAITING_PROVIDER_CONFIRMATION') return null;
-    item.status = 'COLLECTED'; item.updatedAt = new Date().toISOString(); return item;
+    const now = new Date().toISOString();
+    item.activity.push({ id: randomUUID(), actorId: req.account!.id, actorName: req.account!.organizationName, fromStatus: item.status, toStatus: 'COLLECTED', createdAt: now });
+    item.status = 'COLLECTED'; item.updatedAt = now; return item;
   });
   if (!pickup) { res.status(409).json({ error: { code: 'PICKUP_NOT_CONFIRMABLE', message: 'This pickup is not awaiting provider confirmation.' } }); return; }
   res.json(pickup);
+}));
+
+const recoveryRoles: AccountRole[] = ['FARMER_COLLECTOR', 'COMPOSTER'];
+const addPickupEvent = (pickup: Pickup, actor: Account, toStatus: PickupStatus, reason?: string) => {
+  const now = new Date().toISOString();
+  pickup.activity.push({ id: randomUUID(), actorId: actor.id, actorName: actor.organizationName, fromStatus: pickup.status, toStatus, reason, createdAt: now });
+  pickup.status = toStatus;
+  pickup.updatedAt = now;
+};
+
+app.get('/api/recovery/overview', authenticate, requireRole(...recoveryRoles), asyncRoute(async (req, res) => {
+  const overview = await repository.mutate((db) => {
+    reconcilePickups(db.pickups);
+    const eligible = db.pickups.filter((pickup) => roleCanRecoverPickup(req.account!.role, pickup));
+    const since = Date.now() - 30 * 86400000;
+    const completed = eligible.filter((pickup) => pickup.status === 'COLLECTED' && pickup.reservedByAccountId === req.account!.id && new Date(pickup.updatedAt).getTime() >= since);
+    return {
+      availablePickups: eligible.filter((pickup) => pickup.status === 'AVAILABLE' && new Date(pickup.availableFrom).getTime() <= Date.now() && pickup.collectionAddress).length,
+      activePickup: eligible.find((pickup) => pickup.reservedByAccountId === req.account!.id && ACTIVE_PICKUP_STATUSES.includes(pickup.status)),
+      collectedKgLast30Days: completed.reduce((sum, pickup) => sum + pickup.estimatedWeightKg, 0),
+      completedPickupsLast30Days: completed.length
+    };
+  });
+  res.json(overview);
+}));
+
+app.get('/api/recovery/pickups', authenticate, requireRole(...recoveryRoles), asyncRoute(async (req, res) => {
+  const scope = z.enum(['available', 'active', 'history']).default('available').parse(req.query.scope);
+  const data = await repository.mutate((db) => {
+    reconcilePickups(db.pickups);
+    const eligible = db.pickups.filter((pickup) => roleCanRecoverPickup(req.account!.role, pickup));
+    if (scope === 'active') return eligible.filter((pickup) => pickup.reservedByAccountId === req.account!.id && ACTIVE_PICKUP_STATUSES.includes(pickup.status));
+    if (scope === 'history') return eligible.filter((pickup) => pickup.reservedByAccountId === req.account!.id && pickup.status === 'COLLECTED').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return eligible.filter((pickup) => pickup.status === 'AVAILABLE' && new Date(pickup.availableFrom).getTime() <= Date.now() && Boolean(pickup.collectionAddress)).sort((a, b) => a.pickupDeadline.localeCompare(b.pickupDeadline));
+  });
+  res.json({ data, pagination: { page: 1, pageSize: 100, totalItems: data.length, totalPages: 1 } });
+}));
+
+app.post('/api/recovery/pickups/:id/reserve', authenticate, requireRole(...recoveryRoles), asyncRoute(async (req, res) => {
+  const result = await repository.mutate((db) => {
+    reconcilePickups(db.pickups);
+    if (db.pickups.some((pickup) => pickup.reservedByAccountId === req.account!.id && ACTIVE_PICKUP_STATUSES.includes(pickup.status))) return { kind: 'active' as const };
+    const pickup = db.pickups.find((item) => item.id === req.params.id);
+    if (!pickup || pickup.status !== 'AVAILABLE' || !roleCanRecoverPickup(req.account!.role, pickup) || !pickup.collectionAddress) return { kind: 'unavailable' as const };
+    const now = new Date();
+    if (new Date(pickup.availableFrom) > now || new Date(pickup.pickupDeadline) <= now) return { kind: 'unavailable' as const };
+    pickup.reservedByAccountId = req.account!.id; pickup.reservedByName = req.account!.organizationName;
+    pickup.reservedAt = now.toISOString();
+    pickup.reservationExpiresAt = new Date(Math.min(now.getTime() + 30 * 60000, new Date(pickup.pickupDeadline).getTime())).toISOString();
+    addPickupEvent(pickup, req.account!, 'RESERVED');
+    return { kind: 'reserved' as const, pickup };
+  });
+  if (result.kind === 'active') { res.status(409).json({ error: { code: 'ACTIVE_PICKUP_EXISTS', message: 'Complete or cancel your active pickup before reserving another.' } }); return; }
+  if (result.kind === 'unavailable') { res.status(409).json({ error: { code: 'PICKUP_UNAVAILABLE', message: 'This pickup is no longer available.' } }); return; }
+  res.json(result.pickup);
+}));
+
+const recoveryTransition = (from: PickupStatus, to: PickupStatus) => asyncRoute(async (req, res) => {
+  const result = await repository.mutate((db) => {
+    reconcilePickups(db.pickups);
+    const pickup = db.pickups.find((item) => item.id === req.params.id && item.reservedByAccountId === req.account!.id);
+    if (!pickup || pickup.status !== from || !roleCanRecoverPickup(req.account!.role, pickup)) return null;
+    addPickupEvent(pickup, req.account!, to); return pickup;
+  });
+  if (!result) { res.status(409).json({ error: { code: 'INVALID_PICKUP_TRANSITION', message: 'That action is no longer available for this pickup.' } }); return; }
+  res.json(result);
+});
+
+app.post('/api/recovery/pickups/:id/start-transit', authenticate, requireRole(...recoveryRoles), recoveryTransition('RESERVED', 'IN_TRANSIT'));
+app.post('/api/recovery/pickups/:id/complete-handoff', authenticate, requireRole(...recoveryRoles), recoveryTransition('IN_TRANSIT', 'AWAITING_PROVIDER_CONFIRMATION'));
+
+app.post('/api/recovery/pickups/:id/cancel', authenticate, requireRole(...recoveryRoles), asyncRoute(async (req, res) => {
+  const { reason } = z.object({ reason: z.string().trim().min(3).max(300) }).parse(req.body);
+  const result = await repository.mutate((db) => {
+    reconcilePickups(db.pickups);
+    const pickup = db.pickups.find((item) => item.id === req.params.id && item.reservedByAccountId === req.account!.id);
+    if (!pickup || !['RESERVED', 'IN_TRANSIT'].includes(pickup.status) || !roleCanRecoverPickup(req.account!.role, pickup)) return null;
+    const next: PickupStatus = new Date(pickup.pickupDeadline) > new Date() ? 'AVAILABLE' : 'EXPIRED';
+    addPickupEvent(pickup, req.account!, next, reason);
+    delete pickup.reservedByAccountId; delete pickup.reservedByName; delete pickup.reservedAt; delete pickup.reservationExpiresAt;
+    return pickup;
+  });
+  if (!result) { res.status(409).json({ error: { code: 'PICKUP_NOT_CANCELLABLE', message: 'This pickup can no longer be cancelled.' } }); return; }
+  res.json(result);
 }));
 
 app.post('/api/admin/pickups/:id/override', authenticate, requireRole('ADMIN'), asyncRoute(async (req, res) => {
@@ -557,9 +682,16 @@ app.post('/api/admin/pickups/:id/override', authenticate, requireRole('ADMIN'), 
       const log = db.logs.find((item) => item.id === pickup.wasteLogId);
       const replacement = db.pickups.some((item) => item.id !== pickup.id && item.wasteLogId === pickup.wasteLogId && !['CANCELLED', 'EXPIRED'].includes(item.status));
       if (!log?.suitableForCollection || replacement) return { kind: 'invalid' as const };
-      next = 'AVAILABLE'; auditAction = 'PICKUP_REOPENED'; pickup.expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+      next = 'AVAILABLE'; auditAction = 'PICKUP_REOPENED'; pickup.pickupDeadline = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+      const provider = db.accounts.find((item) => item.id === pickup.providerId);
+      if (!pickup.collectionAddress && provider?.collectionAddress) { pickup.locality = provider.locality ?? ''; pickup.collectionAddress = provider.collectionAddress; pickup.collectionInstructions = provider.collectionInstructions ?? ''; }
     }
+    const previousStatus = pickup.status;
     pickup.status = next; pickup.updatedAt = new Date().toISOString();
+    pickup.activity.push({ id: randomUUID(), actorId: req.account!.id, actorName: req.account!.displayName, fromStatus: previousStatus, toStatus: next, reason, createdAt: pickup.updatedAt });
+    delete pickup.reservedByAccountId; delete pickup.reservedByName; delete pickup.reservedAt; delete pickup.reservationExpiresAt;
+    pickup.activity.push({ id: randomUUID(), actorId: req.account!.id, actorName: req.account!.displayName, fromStatus: previousStatus, toStatus: next, reason, createdAt: pickup.updatedAt });
+    if (next === 'AVAILABLE' || next === 'CANCELLED' || next === 'EXPIRED') { delete pickup.reservedByAccountId; delete pickup.reservedByName; delete pickup.reservedAt; delete pickup.reservationExpiresAt; }
     const provider = db.accounts.find((item) => item.id === pickup.providerId);
     addAudit(db, req.account!, { action: auditAction, objectType: 'PICKUP', objectId: pickup.id, objectLabel: provider?.organizationName ?? `${pickup.estimatedWeightKg} kg pickup`, summary: `${action === 'REOPEN' ? 'Reopened' : action === 'EXPIRE' ? 'Expired' : 'Cancelled'} ${pickup.estimatedWeightKg} kg pickup.`, reason });
     return { kind: 'updated' as const, pickup };

@@ -8,7 +8,7 @@ Use one responsive workspace to prepare closer to demand and move suitable surpl
 
 </div>
 
-Bloom V2 is the current food-provider-first rebuild of Bloom. It is an active application, not the final product. The food-provider workflow and administrator operations console work locally today, while recovery-partner portals remain intentionally deferred.
+Bloom V2 is the current operational rebuild of Bloom. It is an active application, not the final product. Food Providers, Recovery Partners, and administrators now have role-level workspaces backed by the same persisted pickup lifecycle.
 
 ## Install
 
@@ -28,10 +28,14 @@ npm run dev
 
 Open [http://localhost:5175](http://localhost:5175). The API runs separately at [http://localhost:5002](http://localhost:5002).
 
-Use either local demo account:
+Local file mode creates these demo accounts:
 
-- **School:** access code `SCH-DEMO`, passphrase `bloom-school`.
+- **Food Provider:** access code `SCH-DEMO`, passphrase `bloom-school` (the legacy access code is preserved).
+- **Farmer / Collector:** access code `FCL-DEMO`, passphrase `bloom-recovery`.
+- **Composter:** access code `CMP-DEMO`, passphrase `bloom-recovery`.
 - **Administrator:** access code `ADMIN-BLOOM`, passphrase `bloom-admin`.
+
+The Recovery Partner demo accounts are added only by the explicitly configured file repository. They are not seeded into PostgreSQL production data.
 
 ## What works today
 
@@ -39,12 +43,14 @@ Use either local demo account:
 - **Operate the network:** administrators review applicants, manage organization types, control account access, oversee pickup exceptions, and inspect a visible audit record.
 - **Issue credentials safely:** approval, manual account creation, and passphrase resets reveal a generated access code and one-time passphrase once.
 - **Sign in securely:** approved accounts use role-based sessions and must replace their one-time passphrase after the first sign-in.
-- **Plan servings:** school operators enter attendance, service date, and meal to receive a transparent serving recommendation.
-- **Manage meals:** schools maintain a searchable meal library and assign multiple meals to calendar dates.
+- **Plan servings:** Food Providers enter attendance, service date, and meal to receive a transparent serving recommendation.
+- **Manage meals:** Food Providers maintain a searchable meal library and assign multiple meals to calendar dates.
 - **Repeat schedules:** meal assignments can run once, weekly, or every two weeks with an optional end date.
-- **Record each service:** schools can save more than one waste log on the same date, so a second service or a corrected operational count does not overwrite another record.
+- **Record each service:** Food Providers can save more than one waste log on the same date, so a second service or a corrected operational count does not overwrite another record.
 - **Correct records:** each waste log can be edited or deleted independently until a recovery partner accepts its related pickup.
-- **Publish pickups:** suitable leftovers can be published separately from the daily log and tracked through the collection lifecycle.
+- **Publish pickups:** Food Providers choose eligible recovery roles, a collection window, and pickup instructions. Bloom snapshots the saved address so an active listing does not change later.
+- **Recover surplus:** Farmer / Collector and Composter accounts share one Recovery Partner workspace for eligible listings, one active pickup, handoff progress, and confirmed history.
+- **Reserve safely:** reservation is atomic, hides the pickup from others for 30 minutes, and releases it automatically when a partner does not start transit in time.
 - **Use recorded insights:** the tracker calculates leftovers per 100 attendees, meal and cause breakdowns, and a 30-day trend once enough dated records exist.
 - **Manage account details:** organization users can update the account-holder name and change their passphrase from Settings.
 - **Request organization-name changes:** organization users submit a named change request; an administrator approves or rejects it before the account is updated.
@@ -53,7 +59,13 @@ Use either local demo account:
 
 The Home page flows directly into a source-backed Dashboard overview. Its three preview cards show today's waste-log state, the next scheduled service, and the active pickup state before linking to the full workspace.
 
-The detailed Waste tracker keeps the serving calculator, daily waste uploader, pickup publishing action, and recorded-data insights together. Meal calendar and Pickups remain separate focused workspaces. Schools use this workflow today; later food-provider variants will adapt its language and operational details.
+The detailed Waste tracker keeps the serving calculator, service-record uploader, pickup publishing action, and recorded-data insights together. Meal calendar and Pickups remain separate focused workspaces. Every Food Provider subtype receives this same interface; subtype labels never alter operational routing or wording.
+
+## Recovery Partner workspace
+
+Farmer / Collector and Composter accounts share the same Home, Available pickups, My pickup, History, and Settings experience. Available pickups are role-eligible, ordered by deadline, and show the Food Food Provider, exact address, weight, collection window, route, and instructions before reservation.
+
+A partner can hold one pickup across Reserved, In transit, and Awaiting provider confirmation. Reserved pickups release after 30 minutes unless transit starts. Partners can cancel Reserved or In-transit pickups with a reason; after handoff, only the Food Provider can confirm collection. The Home summary reports only persisted 30-day kilograms and completed pickup counts.
 
 ## Administrator workspace
 
@@ -78,9 +90,8 @@ Passphrases are hashed. Sessions use HTTP-only cookies, expire automatically, an
 
 ## Current scope
 
-- **Available now:** food-provider Home, Dashboard overview, Waste tracker, Meal calendar, Pickups, Settings, authentication, dynamic access requests, and the administrator operations console.
-- **Still limited:** farmer/collector and composter accounts can sign in, but their operational portals are deferred.
-- **Still deferred:** automatic credential delivery, Capacitor packaging, recovery-partner portals, maps, exports, SMS integrations, and deeper administrative analytics.
+- **Available now:** Food Provider, Recovery Partner, and administrator workspaces; role-aware authentication; dynamic access requests; service planning and logs; collection publishing; atomic reservation; handoff confirmation; and self-service account settings.
+- **Still deferred:** automatic credential delivery, Capacitor packaging, maps and geocoding, exports, SMS integrations, subtype-specific workflows, and deeper administrative analytics.
 - **Not fabricated:** sparse datasets show an onboarding state instead of hard-coded trends, monetary claims, diversion figures, or reliability scores.
 
 ## License

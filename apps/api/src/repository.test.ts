@@ -10,11 +10,11 @@ describe('admin data foundation', () => {
       assignments: [], logs: [],
       pickups: [{ id: 'pickup-1', schoolId: 'school-1', wasteLogId: 'log-1', estimatedWeightKg: 4, destination: 'LIVESTOCK_OR_COMPOST', status: 'AWAITING_SCHOOL_CONFIRMATION', createdAt: '2026-01-01', updatedAt: '2026-01-01' }]
     });
-    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.schemaVersion).toBe(3);
     expect(migrated.accounts[0]).toMatchObject({ role: 'FOOD_PROVIDER', accessCode: 'SCH-OLD', organizationTypeId: 'type-public-school', status: 'ACTIVE' });
     expect(migrated.accessRequests[0]).toMatchObject({ role: 'FOOD_PROVIDER', organizationTypeName: 'Public school' });
     expect(migrated.meals[0].providerId).toBe('school-1');
-    expect(migrated.pickups[0]).toMatchObject({ providerId: 'school-1', status: 'AWAITING_PROVIDER_CONFIRMATION' });
+    expect(migrated.pickups[0]).toMatchObject({ providerId: 'school-1', status: 'AWAITING_PROVIDER_CONFIRMATION', eligibleRoles: ['FARMER_COLLECTOR', 'COMPOSTER'] });
   });
 
   it('creates role-specific access codes without collisions', () => {

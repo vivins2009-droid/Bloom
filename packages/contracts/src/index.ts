@@ -1,5 +1,6 @@
 export type AccountRole = 'FOOD_PROVIDER' | 'FARMER_COLLECTOR' | 'COMPOSTER' | 'ADMIN';
 export type PublicAccountRole = Exclude<AccountRole, 'ADMIN'>;
+export type RecoveryRole = Extract<AccountRole, 'FARMER_COLLECTOR' | 'COMPOSTER'>;
 export type AccountStatus = 'ACTIVE' | 'SUSPENDED';
 export type AccessRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type OrganizationNameRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -26,6 +27,9 @@ export interface Account {
   organizationTypeId?: string;
   status: AccountStatus;
   firstLogin: boolean;
+  locality?: string;
+  collectionAddress?: string;
+  collectionInstructions?: string;
   createdAt: string;
 }
 
@@ -94,16 +98,43 @@ export interface DailyWasteLog {
   createdAt: string;
 }
 
+export interface PickupActivityEvent {
+  id: string;
+  actorId: string;
+  actorName: string;
+  fromStatus: PickupStatus;
+  toStatus: PickupStatus;
+  reason?: string;
+  createdAt: string;
+}
+
 export interface Pickup {
   id: string;
   providerId: string;
+  providerName: string;
   wasteLogId: string;
   estimatedWeightKg: number;
-  destination: 'LIVESTOCK_OR_COMPOST';
+  eligibleRoles: RecoveryRole[];
   status: PickupStatus;
-  expiresAt?: string;
+  availableFrom: string;
+  pickupDeadline: string;
+  locality: string;
+  collectionAddress: string;
+  collectionInstructions: string;
+  reservedByAccountId?: string;
+  reservedByName?: string;
+  reservedAt?: string;
+  reservationExpiresAt?: string;
+  activity: PickupActivityEvent[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface RecoveryOverview {
+  availablePickups: number;
+  activePickup?: Pickup;
+  collectedKgLast30Days: number;
+  completedPickupsLast30Days: number;
 }
 
 export interface Recommendation {
