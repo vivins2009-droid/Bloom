@@ -88,6 +88,7 @@ Local development uses the file-backed repository only when `DATA_DRIVER=file` i
 | `WEB_ORIGINS` | Comma-separated production, preview, or staging frontend origins. | Yes |
 | `DATABASE_URL` | Provides the PostgreSQL connection string when `DATA_DRIVER=postgres`. | PostgreSQL only |
 | `CHAT_ENABLED` | Enables production chat after database, storage, email, and socket health checks pass. | Production chat |
+| `EMAIL_ENABLED` | Enables queued transactional email. Keep `false` until Resend is configured. | Production email |
 | `ATTACHMENT_DRIVER` | `file` locally or `r2` in production. | Yes |
 | `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Private Cloudflare R2 object storage. Never expose these to Vite. | Production images |
 | `ATTACHMENT_SIGNING_SECRET` | Signs five-minute image access links. | Production images |
@@ -98,7 +99,7 @@ Local development uses the file-backed repository only when `DATA_DRIVER=file` i
 
 Passphrases use versioned salted scrypt hashes. Opaque sessions are stored durably as token hashes, use Secure HTTP-only SameSite cookies in production, expire after 12 hours, and are checked against current account status. State-changing production requests require a rotating CSRF token. Login, access request, recovery, message, and image endpoints are rate-limited.
 
-On the first production deployment only, set `BOOTSTRAP_ADMIN_EMAIL` (and optionally `BOOTSTRAP_ADMIN_NAME` and `BOOTSTRAP_ADMIN_ORGANIZATION`). If no administrator exists, Bloom creates one and queues a 24-hour setup email containing its generated access code and one-time setup link. Restarting cannot create a second bootstrap administrator. The bootstrap email variable can be removed after the first administrator signs in.
+Production starts with `CHAT_ENABLED=false` and `EMAIL_ENABLED=false` while those integrations are intentionally deferred; their routes remain unavailable rather than falling back to local storage or simulated delivery. Enabling chat requires the complete R2 and Resend configuration. On the first email-enabled production deployment, set `BOOTSTRAP_ADMIN_EMAIL` (and optionally `BOOTSTRAP_ADMIN_NAME` and `BOOTSTRAP_ADMIN_ORGANIZATION`). If no administrator exists, Bloom creates one and queues a 24-hour setup email containing its generated access code and one-time setup link. Restarting cannot create a second bootstrap administrator. The bootstrap email variable can be removed after the first administrator signs in.
 
 PostgreSQL uses one table per entity group. On first production start, the idempotent importer reads a legacy schema-version-3 `bloom_state` document in one transaction, preserves its IDs and access codes, verifies normalization through repository reads, and leaves the old document untouched as rollback material. PostgreSQL failure is fatal; there is no file fallback.
 

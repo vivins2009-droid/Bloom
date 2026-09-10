@@ -6,6 +6,7 @@ const tokenHash = (value: string) => createHash('sha256').update(value).digest('
 
 export async function bootstrapProductionAdmin(repository: Repository, frontendOrigin: string) {
   if (process.env.NODE_ENV !== 'production') return;
+  if (process.env.EMAIL_ENABLED !== 'true') return;
   await repository.mutate((db) => {
     if (db.accounts.some((account) => account.role === 'ADMIN')) return;
     const email = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();

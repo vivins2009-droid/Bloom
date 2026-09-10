@@ -18,6 +18,8 @@ validateRuntimeConfig();
 const app = express();
 const port = Number(process.env.PORT || 5002);
 const allowedOrigins = (process.env.WEB_ORIGINS || process.env.WEB_ORIGIN || 'http://localhost:5175').split(',').map((value) => value.trim()).filter(Boolean);
+const chatEnabled = process.env.NODE_ENV !== 'production' || process.env.CHAT_ENABLED === 'true';
+const emailEnabled = process.env.NODE_ENV !== 'production' || process.env.EMAIL_ENABLED === 'true';
 const repository = await createRepository();
 await bootstrapProductionAdmin(repository, allowedOrigins[0]);
 const SESSION_MS = 12 * 60 * 60 * 1000;
@@ -140,10 +142,13 @@ const requestSchema = z.object({
 
 app.get('/api/health', asyncRoute(async (_req, res) => {
   await repository.read();
-  const chatEnabled = process.env.NODE_ENV !== 'production' || process.env.CHAT_ENABLED === 'true';
-  const services = { database: process.env.DATA_DRIVER === 'postgres' ? 'postgres' : 'file', chat: chatEnabled, attachments: process.env.ATTACHMENT_DRIVER || 'file', email: Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM) };
-  const ready = process.env.NODE_ENV !== 'production' || (!chatEnabled || (services.attachments === 'r2' && services.email && Boolean(process.env.ATTACHMENT_SIGNING_SECRET)));
-  res.status(ready ? 200 : 503).json({ status: ready ? 'ok' : 'configuration_required', services });
+  const services = {
+    database: process.env.DATA_DRIVER === 'postgres' ? 'postgres' : 'file',
+    chat: chatEnabled ? 'enabled' : 'disabled',
+    attachments: chatEnabled ? (process.env.ATTACHMENT_DRIVER || 'file') : 'disabled',
+    email: emailEnabled ? 'enabled' : 'disabled'
+  };
+  res.status(200).json({ status: 'ok', services });
 }));
 
 app.get('/api/organization-types', asyncRoute(async (_req, res) => {
@@ -818,7 +823,7 @@ app.post('/api/admin/pickups/:id/override', authenticate, requireRole('ADMIN'), 
   res.json(result.pickup);
 }));
 
-const requireChatEnabled = (_req: AuthedRequest, res: Response, next: NextFunction) => { if (process.env.NODE_ENV === 'production' && process.env.CHAT_ENABLED !== 'true') { res.status(503).json({ error: { code: 'CHAT_DISABLED', message: 'Chat is not available yet.' } }); return; } next(); };
+const requireChatEnabled = (_req: AuthedRequest, res: Response, next: NextFunction) => { if (!chatEnabled) { res.status(503).json({ error: { code: 'CHAT_DISABLED', message: 'Chat is not available yet.' } }); return; } next(); };
 app.use('/api/chat', requireChatEnabled);
 app.use('/api/admin/chat', requireChatEnabled);
 
@@ -992,7 +997,7 @@ if (process.env.NODE_ENV !== 'test') {
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 1024 });
   server.on('upgrade', async (request, socket) => {
     try {
-      if (request.url !== '/api/chat/socket' || request.headers.upgrade?.toLowerCase() !== 'websocket' || (process.env.NODE_ENV === 'production' && (!request.headers.origin || !allowedOrigins.includes(request.headers.origin)))) { socket.destroy(); return; }
+      if (!chatEnabled || request.url !== '/api/chat/socket' || request.headers.upgrade?.toLowerCase() !== 'websocket' || (process.env.NODE_ENV === 'production' && (!request.headers.origin || !allowedOrigins.includes(request.headers.origin)))) { socket.destroy(); return; }
       const cookies = Object.fromEntries(String(request.headers.cookie ?? '').split(';').map((part) => part.trim().split('=').map(decodeURIComponent)).filter((part) => part.length === 2));
       const sessionHash = cookies.bloom_session ? tokenHash(cookies.bloom_session) : '';
       const db = await repository.read(); const session = db.sessions.find((item) => item.tokenHash === sessionHash && !item.revokedAt && new Date(item.expiresAt).getTime() > Date.now()); const account = session && db.accounts.find((item) => item.id === session.accountId && item.status === 'ACTIVE');
@@ -1009,8 +1014,8 @@ if (process.env.NODE_ENV !== 'test') {
   }, 25000);
   heartbeat.unref();
   server.listen(port, () => console.log(`Bloom API listening at http://localhost:${port} (${process.env.DATA_DRIVER})`));
-  void processEmailQueue(repository); setInterval(() => void processEmailQueue(repository), 30000).unref();
-  void cleanExpiredChatContent(repository); setInterval(() => void cleanExpiredChatContent(repository), 24 * 3600000).unref();
+  if (emailEnabled) { void processEmailQueue(repository); setInterval(() => void processEmailQueue(repository), 30000).unref(); }
+  if (chatEnabled) { void cleanExpiredChatContent(repository); setInterval(() => void cleanExpiredChatContent(repository), 24 * 3600000).unref(); }
 }
 
 export { app, repository as repositoryInstance };

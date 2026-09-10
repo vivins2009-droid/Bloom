@@ -25,8 +25,45 @@ describe('production readiness', () => {
   it('rejects production startup when required private services are missing', () => {
     process.env.NODE_ENV = 'production';
     process.env.DATA_DRIVER = 'postgres';
+    process.env.CHAT_ENABLED = 'false';
+    process.env.EMAIL_ENABLED = 'false';
     delete process.env.DATABASE_URL;
     expect(() => validateRuntimeConfig()).toThrow(/DATABASE_URL/);
+  });
+
+  it('starts the core production API when deferred integrations are explicitly disabled', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.DATA_DRIVER = 'postgres';
+    process.env.DATABASE_URL = 'postgresql://example.invalid/bloom';
+    process.env.WEB_ORIGINS = 'https://web.example.org';
+    process.env.API_PUBLIC_URL = 'https://api.example.org';
+    process.env.CHAT_ENABLED = 'false';
+    process.env.EMAIL_ENABLED = 'false';
+    expect(() => validateRuntimeConfig()).not.toThrow();
+  });
+
+  it('requires the private integrations before production chat can be enabled', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.DATA_DRIVER = 'postgres';
+    process.env.DATABASE_URL = 'postgresql://example.invalid/bloom';
+    process.env.WEB_ORIGINS = 'https://web.example.org';
+    process.env.API_PUBLIC_URL = 'https://api.example.org';
+    process.env.CHAT_ENABLED = 'true';
+    process.env.EMAIL_ENABLED = 'false';
+    expect(() => validateRuntimeConfig()).toThrow(/ATTACHMENT_DRIVER/);
+  });
+
+  it('requires Resend credentials before production email can be enabled', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.DATA_DRIVER = 'postgres';
+    process.env.DATABASE_URL = 'postgresql://example.invalid/bloom';
+    process.env.WEB_ORIGINS = 'https://web.example.org';
+    process.env.API_PUBLIC_URL = 'https://api.example.org';
+    process.env.CHAT_ENABLED = 'false';
+    process.env.EMAIL_ENABLED = 'true';
+    delete process.env.RESEND_API_KEY;
+    delete process.env.EMAIL_FROM;
+    expect(() => validateRuntimeConfig()).toThrow(/RESEND_API_KEY/);
   });
 
   it('creates the first administrator once and queues a setup email without storing the link token', async () => {
@@ -36,6 +73,7 @@ describe('production readiness', () => {
       mutate: async (work) => { const value = work(state); state = normalizeDatabase(state); return value; }
     };
     process.env.NODE_ENV = 'production';
+    process.env.EMAIL_ENABLED = 'true';
     process.env.BOOTSTRAP_ADMIN_EMAIL = 'owner@example.org';
     await bootstrapProductionAdmin(repository, 'https://web.example.org');
     await bootstrapProductionAdmin(repository, 'https://web.example.org');

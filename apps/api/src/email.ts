@@ -1,6 +1,7 @@
 import type { Repository } from './repository.js';
 
 export async function processEmailQueue(repository: Repository) {
+  if (process.env.EMAIL_ENABLED !== 'true') return;
   const apiKey = process.env.RESEND_API_KEY; const from = process.env.EMAIL_FROM;
   if (!apiKey || !from) return;
   const jobs = await repository.mutate((db) => {
