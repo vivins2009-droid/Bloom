@@ -7,7 +7,7 @@ import type { AccessRequest, Account, AdminAuditEvent, ChatAttachment, ChatConve
 export interface StoredAccount extends Account { passphraseHash: string }
 export interface StoredSession { tokenHash: string; accountId: string; csrfHash: string; createdAt: string; expiresAt: string; lastActivityAt: string; revokedAt?: string }
 export interface AccountToken { id: string; accountId: string; purpose: 'SETUP' | 'RESET' | 'VERIFY_EMAIL'; tokenHash: string; expiresAt: string; usedAt?: string; createdAt: string }
-export interface EmailJob { id: string; to: string; subject: string; text: string; attempts: number; nextAttemptAt: string; createdAt: string; conversationId?: string; sentAt?: string; lastError?: string }
+export interface EmailJob { id: string; to: string; subject: string; text: string; attempts: number; nextAttemptAt: string; createdAt: string; conversationId?: string; processingAt?: string; providerMessageId?: string; sentAt?: string; lastError?: string }
 export interface Database {
   schemaVersion: 4;
   accounts: StoredAccount[];

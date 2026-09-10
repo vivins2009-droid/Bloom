@@ -1,6 +1,7 @@
 import { createHash, createHmac } from 'node:crypto';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import sharp from 'sharp';
 
 type MediaType = 'image/jpeg' | 'image/png' | 'image/webp';
 
@@ -74,4 +75,43 @@ export function validateImage(content: Buffer, declared: string): MediaType {
   const actual: MediaType | undefined = jpeg ? 'image/jpeg' : png ? 'image/png' : webp ? 'image/webp' : undefined;
   if (!actual || actual !== declared) throw new Error('The image contents do not match its declared JPEG, PNG, or WebP type.');
   return actual;
+}
+
+export interface SanitizedImage {
+  content: Buffer;
+  mediaType: MediaType;
+  width: number;
+  height: number;
+}
+
+/**
+ * Decode untrusted image bytes on the server and write a fresh WebP image.
+ * Re-encoding removes metadata and prevents a client from smuggling bytes that
+ * merely have a valid-looking file header.
+ */
+export async function sanitizeImage(content: Buffer, declared: string): Promise<SanitizedImage> {
+  validateImage(content, declared);
+  const image = sharp(content, {
+    failOn: 'error',
+    limitInputPixels: 24_000_000,
+    sequentialRead: true
+  });
+  const metadata = await image.metadata();
+  if (!metadata.width || !metadata.height || metadata.pages && metadata.pages !== 1) {
+    throw new Error('The image could not be decoded as a single valid image.');
+  }
+  const output = await image
+    .rotate()
+    .resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 84, effort: 4 })
+    .toBuffer({ resolveWithObject: true });
+  if (!output.info.width || !output.info.height || output.data.byteLength > 5 * 1024 * 1024) {
+    throw new Error('The sanitized image is too large. Choose a smaller image.');
+  }
+  return {
+    content: output.data,
+    mediaType: 'image/webp',
+    width: output.info.width,
+    height: output.info.height
+  };
 }

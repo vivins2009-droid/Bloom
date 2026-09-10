@@ -34,7 +34,7 @@ beforeAll(async () => {
 
 afterAll(async () => { await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); });
 
-describe.sequential('admin operations API', () => {
+describe('admin operations API', () => {
   it('submits, approves, and completes first login without exposing plaintext credentials', async () => {
     const submitted = await request('/api/access-requests', { method: 'POST', body: JSON.stringify({ applicantName: 'Test Operator', role: 'FOOD_PROVIDER', organizationTypeId: 'type-public-school', organizationName: 'Test Community Kitchen', contact: 'operator-test@example.org', note: 'Integration check' }) });
     expect(submitted.response.status).toBe(201);

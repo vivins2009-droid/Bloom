@@ -92,14 +92,17 @@ Local development uses the file-backed repository only when `DATA_DRIVER=file` i
 | `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Private Cloudflare R2 object storage. Never expose these to Vite. | Production images |
 | `ATTACHMENT_SIGNING_SECRET` | Signs five-minute image access links. | Production images |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Transactional setup, recovery, and throttled chat notification email. | Production email |
+| `BOOTSTRAP_ADMIN_EMAIL` | Receives the first administrator’s generated access code and setup link when production has no administrator yet. | First production deployment only |
 | `API_PUBLIC_URL` | Public Railway API origin used in attachment links. | Production |
 | `VITE_API_URL` | Public API origin compiled into the Vercel frontend. It is not a secret. | Vercel |
 
 Passphrases use versioned salted scrypt hashes. Opaque sessions are stored durably as token hashes, use Secure HTTP-only SameSite cookies in production, expire after 12 hours, and are checked against current account status. State-changing production requests require a rotating CSRF token. Login, access request, recovery, message, and image endpoints are rate-limited.
 
+On the first production deployment only, set `BOOTSTRAP_ADMIN_EMAIL` (and optionally `BOOTSTRAP_ADMIN_NAME` and `BOOTSTRAP_ADMIN_ORGANIZATION`). If no administrator exists, Bloom creates one and queues a 24-hour setup email containing its generated access code and one-time setup link. Restarting cannot create a second bootstrap administrator. The bootstrap email variable can be removed after the first administrator signs in.
+
 PostgreSQL uses one table per entity group. On first production start, the idempotent importer reads a legacy schema-version-3 `bloom_state` document in one transaction, preserves its IDs and access codes, verifies normalization through repository reads, and leaves the old document untouched as rollback material. PostgreSQL failure is fatal; there is no file fallback.
 
-Chat uses REST for every committed mutation and an authenticated WebSocket for immediate update notifications. If the socket disconnects, the UI continues sending through REST and polls every 15 seconds while reconnecting. Messages and attachments expire after one year; the API runs daily cleanup. Pickup conversations become read-only seven days after their terminal state.
+Chat uses REST for every committed mutation and a standards-compliant authenticated WebSocket for immediate update notifications. If the socket disconnects, the UI continues sending through REST and polls every 15 seconds while reconnecting. Images are decoded and re-encoded as metadata-free WebP files by the API before private storage. Messages and attachments expire after one year; the API runs daily cleanup. Pickup conversations become read-only seven days after their terminal state.
 
 The included `vercel.json` builds the Vite workspace as a single-page application. `railway.json` builds and runs the persistent Express/WebSocket service and checks `/api/health`. Configure separate databases, R2 buckets, Resend keys, and domains for development, staging, and production.
 

@@ -3,19 +3,23 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
-import type { Duplex } from 'node:stream';
 import { z } from 'zod';
+import { WebSocket, WebSocketServer } from 'ws';
 import type { Account, AccountRole, AccessRequest, AdminAuditAction, ChatConversation, ChatMessage, DailyWasteLog, MealAssignment, Pickup, PickupStatus, PublicAccountRole, RecoveryRole } from '@bloom/contracts';
 import { ACTIVE_PICKUP_STATUSES, calculateInsights, calculateRecommendation, reconcilePickups, recurrenceDates, roleCanRecoverPickup } from './domain.js';
 import { createAccessCode, createPassphrase, createRepository, hashPassphrase, verifyPassphrase, type Repository } from './repository.js';
-import { getAttachment, putAttachment, validateImage } from './storage.js';
+import { deleteAttachment, getAttachment, putAttachment, sanitizeImage } from './storage.js';
 import { processEmailQueue } from './email.js';
 import { cleanExpiredChatContent } from './retention.js';
+import { validateRuntimeConfig } from './config.js';
+import { bootstrapProductionAdmin } from './bootstrap.js';
 
+validateRuntimeConfig();
 const app = express();
 const port = Number(process.env.PORT || 5002);
 const allowedOrigins = (process.env.WEB_ORIGINS || process.env.WEB_ORIGIN || 'http://localhost:5175').split(',').map((value) => value.trim()).filter(Boolean);
 const repository = await createRepository();
+await bootstrapProductionAdmin(repository, allowedOrigins[0]);
 const SESSION_MS = 12 * 60 * 60 * 1000;
 const tokenHash = (value: string) => createHash('sha256').update(value).digest('hex');
 const makeToken = () => randomBytes(32).toString('base64url');
@@ -26,17 +30,16 @@ const rateLimit = (name: string, max: number, windowMs: number) => (req: AuthedR
   if (blockedUntil) { res.setHeader('Retry-After', String(Math.ceil((blockedUntil - now) / 1000))); res.status(429).json({ error: { code: 'RATE_LIMITED', message: 'Too many attempts. Wait a moment and try again.' } }); return; }
   next();
 };
-const realtimeClients = new Map<string, Set<Duplex>>();
-const websocketFrame = (text: string) => {
-  const body = Buffer.from(text); const header = body.length < 126 ? Buffer.from([0x81, body.length]) : Buffer.from([0x81, 126, body.length >> 8, body.length & 255]); return Buffer.concat([header, body]);
-};
+const realtimeClients = new Map<string, Set<WebSocket>>();
 const broadcast = (accountIds: string[], event: object) => {
-  const frame = websocketFrame(JSON.stringify(event));
-  new Set(accountIds).forEach((accountId) => realtimeClients.get(accountId)?.forEach((socket) => { if (!socket.destroyed) socket.write(frame); }));
+  const payload = JSON.stringify(event);
+  new Set(accountIds).forEach((accountId) => realtimeClients.get(accountId)?.forEach((socket) => {
+    if (socket.readyState === WebSocket.OPEN) socket.send(payload);
+  }));
 };
 
 app.use(cors({ origin: (requestOrigin, callback) => callback(null, !requestOrigin || allowedOrigins.includes(requestOrigin)), credentials: true, exposedHeaders: ['x-csrf-token', 'x-trace-id'] }));
-app.use(express.json({ limit: '24mb' }));
+app.use(express.json({ limit: '8mb' }));
 app.use(cookieParser());
 app.use((req, res, next) => { const requestOrigin = req.headers.origin; if (process.env.NODE_ENV === 'production' && requestOrigin && !allowedOrigins.includes(requestOrigin)) { res.status(403).json({ error: { code: 'ORIGIN_REJECTED', message: 'This request origin is not allowed.' } }); return; } next(); });
 
@@ -909,21 +912,26 @@ app.post('/api/chat/conversations/:id/read', authenticate, asyncRoute(async (req
 }));
 
 app.post('/api/chat/conversations/:id/attachments', authenticate, rateLimit('upload', 20, 60000), asyncRoute(async (req, res) => {
-  const input = z.object({ dataUrl: z.string().max(7_500_000), mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp']), width: z.number().int().positive().max(4096), height: z.number().int().positive().max(4096) }).parse(req.body);
+  const input = z.object({ dataUrl: z.string().max(7_500_000), mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp']), width: z.number().int().positive().max(4096).optional(), height: z.number().int().positive().max(4096).optional() }).parse(req.body);
   const conversation = (await repository.read()).chatConversations.find((item) => item.id === req.params.id);
   if (!conversation || !conversationAccess(conversation, req.account!)) { res.status(404).json({ error: { code: 'CONVERSATION_NOT_FOUND', message: 'That conversation is not available.' } }); return; }
   if (conversationIsReadOnly(conversation)) { res.status(409).json({ error: { code: 'CONVERSATION_CLOSED', message: 'This conversation is now read-only.' } }); return; }
   const encoded = input.dataUrl.includes(',') ? input.dataUrl.slice(input.dataUrl.indexOf(',') + 1) : input.dataUrl;
   const content = Buffer.from(encoded, 'base64');
-  let mediaType: 'image/jpeg' | 'image/png' | 'image/webp';
-  try { mediaType = validateImage(content, input.mediaType); } catch (error) { res.status(422).json({ error: { code: 'INVALID_IMAGE', message: error instanceof Error ? error.message : 'The image is invalid.' } }); return; }
-  const id = randomUUID(); const extension = mediaType === 'image/jpeg' ? 'jpg' : mediaType === 'image/png' ? 'png' : 'webp'; const objectKey = `chat/${conversation.id}/${id}.${extension}`;
-  await putAttachment(objectKey, content, mediaType);
-  const attachment = await repository.mutate((db) => {
-    const item = { id, conversationId: conversation.id, objectKey, mediaType, width: input.width, height: input.height, byteSize: content.byteLength, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 365 * 86400000).toISOString() };
-    db.chatAttachments.push(item); return item;
-  });
-  res.status(201).json(attachment);
+  let sanitized: Awaited<ReturnType<typeof sanitizeImage>>;
+  try { sanitized = await sanitizeImage(content, input.mediaType); } catch (error) { res.status(422).json({ error: { code: 'INVALID_IMAGE', message: error instanceof Error ? error.message : 'The image is invalid.' } }); return; }
+  const id = randomUUID(); const objectKey = `chat/${conversation.id}/${id}.webp`;
+  await putAttachment(objectKey, sanitized.content, sanitized.mediaType);
+  try {
+    const attachment = await repository.mutate((db) => {
+      const item = { id, conversationId: conversation.id, objectKey, mediaType: sanitized.mediaType, width: sanitized.width, height: sanitized.height, byteSize: sanitized.content.byteLength, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 365 * 86400000).toISOString() };
+      db.chatAttachments.push(item); return item;
+    });
+    res.status(201).json(attachment);
+  } catch (error) {
+    await deleteAttachment(objectKey);
+    throw error;
+  }
 }));
 
 app.get('/api/chat/attachments/:id/access', authenticate, asyncRoute(async (req, res) => {
@@ -981,21 +989,25 @@ app.use((error: unknown, req: AuthedRequest, res: Response, _next: NextFunction)
 
 if (process.env.NODE_ENV !== 'test') {
   const server = createServer(app);
+  const sockets = new WebSocketServer({ noServer: true, maxPayload: 1024 });
   server.on('upgrade', async (request, socket) => {
     try {
       if (request.url !== '/api/chat/socket' || request.headers.upgrade?.toLowerCase() !== 'websocket' || (process.env.NODE_ENV === 'production' && (!request.headers.origin || !allowedOrigins.includes(request.headers.origin)))) { socket.destroy(); return; }
-      const key = request.headers['sec-websocket-key']; if (!key) { socket.destroy(); return; }
       const cookies = Object.fromEntries(String(request.headers.cookie ?? '').split(';').map((part) => part.trim().split('=').map(decodeURIComponent)).filter((part) => part.length === 2));
       const sessionHash = cookies.bloom_session ? tokenHash(cookies.bloom_session) : '';
       const db = await repository.read(); const session = db.sessions.find((item) => item.tokenHash === sessionHash && !item.revokedAt && new Date(item.expiresAt).getTime() > Date.now()); const account = session && db.accounts.find((item) => item.id === session.accountId && item.status === 'ACTIVE');
       if (!account) { socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n'); socket.destroy(); return; }
-      const accept = createHash('sha1').update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64');
-      socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
-      const clients = realtimeClients.get(account.id) ?? new Set<Duplex>(); clients.add(socket); realtimeClients.set(account.id, clients);
-      const remove = () => { clients.delete(socket); if (!clients.size) realtimeClients.delete(account.id); };
-      socket.on('close', remove); socket.on('error', remove); socket.on('data', (data) => { if ((data[0] & 0x0f) === 0x08) socket.end(); });
+      sockets.handleUpgrade(request, socket, Buffer.alloc(0), (websocket) => {
+        const clients = realtimeClients.get(account.id) ?? new Set<WebSocket>(); clients.add(websocket); realtimeClients.set(account.id, clients);
+        const remove = () => { clients.delete(websocket); if (!clients.size) realtimeClients.delete(account.id); };
+        websocket.on('close', remove); websocket.on('error', remove); websocket.on('message', () => undefined);
+      });
     } catch { socket.destroy(); }
   });
+  const heartbeat = setInterval(() => {
+    for (const clients of realtimeClients.values()) for (const socket of clients) if (socket.readyState === WebSocket.OPEN) socket.ping();
+  }, 25000);
+  heartbeat.unref();
   server.listen(port, () => console.log(`Bloom API listening at http://localhost:${port} (${process.env.DATA_DRIVER})`));
   void processEmailQueue(repository); setInterval(() => void processEmailQueue(repository), 30000).unref();
   void cleanExpiredChatContent(repository); setInterval(() => void cleanExpiredChatContent(repository), 24 * 3600000).unref();
