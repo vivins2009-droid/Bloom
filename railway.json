@@ -1,0 +1,5 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": { "builder": "NIXPACKS", "buildCommand": "npm ci && npm run build -w @bloom/contracts && npm run build -w @bloom/api" },
+  "deploy": { "startCommand": "node apps/api/dist/server.js", "healthcheckPath": "/api/health", "healthcheckTimeout": 20, "restartPolicyType": "ON_FAILURE", "restartPolicyMaxRetries": 10 }
+}

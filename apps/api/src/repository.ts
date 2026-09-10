@@ -1,12 +1,15 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import { Pool } from 'pg';
-import type { AccessRequest, Account, AdminAuditEvent, DailyWasteLog, Meal, MealAssignment, OrganizationNameChangeRequest, OrganizationType, Pickup, PublicAccountRole } from '@bloom/contracts';
+import { Pool, type PoolClient } from 'pg';
+import type { AccessRequest, Account, AdminAuditEvent, ChatAttachment, ChatConversation, ChatMessage, ChatParticipant, DailyWasteLog, Meal, MealAssignment, OrganizationNameChangeRequest, OrganizationType, Pickup, PublicAccountRole } from '@bloom/contracts';
 
 export interface StoredAccount extends Account { passphraseHash: string }
+export interface StoredSession { tokenHash: string; accountId: string; csrfHash: string; createdAt: string; expiresAt: string; lastActivityAt: string; revokedAt?: string }
+export interface AccountToken { id: string; accountId: string; purpose: 'SETUP' | 'RESET' | 'VERIFY_EMAIL'; tokenHash: string; expiresAt: string; usedAt?: string; createdAt: string }
+export interface EmailJob { id: string; to: string; subject: string; text: string; attempts: number; nextAttemptAt: string; createdAt: string; conversationId?: string; sentAt?: string; lastError?: string }
 export interface Database {
-  schemaVersion: 3;
+  schemaVersion: 4;
   accounts: StoredAccount[];
   accessRequests: AccessRequest[];
   organizationNameRequests: OrganizationNameChangeRequest[];
@@ -16,6 +19,13 @@ export interface Database {
   assignments: MealAssignment[];
   logs: DailyWasteLog[];
   pickups: Pickup[];
+  sessions: StoredSession[];
+  accountTokens: AccountToken[];
+  chatConversations: ChatConversation[];
+  chatParticipants: ChatParticipant[];
+  chatMessages: ChatMessage[];
+  chatAttachments: ChatAttachment[];
+  emailJobs: EmailJob[];
 }
 
 export interface Repository {
@@ -25,11 +35,12 @@ export interface Repository {
 
 export const hashPassphrase = (passphrase: string) => {
   const salt = randomBytes(16).toString('hex');
-  return `${salt}:${scryptSync(passphrase, salt, 32).toString('hex')}`;
+  return `scrypt-v1:${salt}:${scryptSync(passphrase, salt, 32).toString('hex')}`;
 };
 
 export const verifyPassphrase = (passphrase: string, stored: string) => {
-  const [salt, hash] = stored.split(':');
+  const parts = stored.split(':');
+  const [salt, hash] = parts.length === 3 ? parts.slice(1) : parts;
   if (!salt || !hash) return false;
   const actual = scryptSync(passphrase, salt, 32);
   const expected = Buffer.from(hash, 'hex');
@@ -59,7 +70,7 @@ export const seededOrganizationTypes = (): OrganizationType[] => typeSeeds.map((
 const seedDatabase = (): Database => {
   const providerId = 'acct-school-demo';
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     accounts: [
       { id: providerId, role: 'FOOD_PROVIDER', accessCode: 'SCH-DEMO', passphraseHash: hashPassphrase('bloom-school'), displayName: 'Ananya Rao', organizationName: 'Coimbatore Government School', contact: 'ananya@example.org', organizationTypeId: 'type-public-school', status: 'ACTIVE', firstLogin: false, locality: 'Coimbatore', collectionAddress: '12 School Road, Coimbatore, Tamil Nadu 641001', collectionInstructions: 'Use the kitchen service entrance and ask for the food service lead.', createdAt: stamp },
       { id: 'acct-admin', role: 'ADMIN', accessCode: 'ADMIN-BLOOM', passphraseHash: hashPassphrase('bloom-admin'), displayName: 'District Administrator', organizationName: 'Coimbatore Food Recovery Office', contact: 'admin@example.org', status: 'ACTIVE', firstLogin: false, createdAt: stamp }
@@ -77,7 +88,14 @@ const seedDatabase = (): Database => {
     ],
     assignments: [{ id: 'assign-today', providerId, date: today, mealIds: ['meal-tomato'], recurrence: { frequency: 'NONE' }, createdAt: stamp }],
     logs: [],
-    pickups: []
+    pickups: [],
+    sessions: [],
+    accountTokens: [],
+    chatConversations: [],
+    chatParticipants: [],
+    chatMessages: [],
+    chatAttachments: [],
+    emailJobs: []
   };
 };
 
@@ -98,7 +116,7 @@ export function normalizeDatabase(input: any): Database {
   const defaultType = (role: PublicAccountRole) => role === 'FOOD_PROVIDER' ? 'type-public-school' : role === 'FARMER_COLLECTOR' ? 'type-independent-collector' : 'type-community-composter';
   const typeName = (id: string) => organizationTypes.find((type) => type.id === id)?.name ?? 'Organization';
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     organizationTypes,
     auditEvents: Array.isArray(raw.auditEvents) ? raw.auditEvents : [],
     organizationNameRequests: Array.isArray(raw.organizationNameRequests) ? raw.organizationNameRequests : [],
@@ -108,6 +126,9 @@ export function normalizeDatabase(input: any): Database {
         ...account,
         role,
         contact: account.contact ?? '',
+        email: account.email ?? (String(account.contact ?? '').includes('@') ? account.contact : undefined),
+        phone: account.phone ?? (!String(account.contact ?? '').includes('@') && account.contact ? account.contact : undefined),
+        contactNeedsReview: account.contactNeedsReview ?? (!String(account.contact ?? '').includes('@')),
         status: account.status ?? 'ACTIVE',
         organizationTypeId: role === 'ADMIN' ? undefined : account.organizationTypeId ?? defaultType(role as PublicAccountRole),
         locality: role === 'FOOD_PROVIDER' ? account.locality ?? '' : undefined,
@@ -118,7 +139,7 @@ export function normalizeDatabase(input: any): Database {
     accessRequests: (raw.accessRequests ?? []).map((request: any) => {
       const role = migrateRole(request.role) as PublicAccountRole;
       const organizationTypeId = request.organizationTypeId ?? defaultType(role);
-      return { ...request, role, organizationTypeId, organizationTypeName: request.organizationTypeName ?? typeName(organizationTypeId) };
+      return { ...request, role, organizationTypeId, organizationTypeName: request.organizationTypeName ?? typeName(organizationTypeId), email: request.email ?? (String(request.contact ?? '').includes('@') ? request.contact : undefined) };
     }),
     meals: (raw.meals ?? []).map(({ schoolId, ...meal }: any) => ({ ...meal, providerId: meal.providerId ?? schoolId })),
     assignments: (raw.assignments ?? []).map(({ schoolId, ...assignment }: any) => ({ ...assignment, providerId: assignment.providerId ?? schoolId })),
@@ -139,7 +160,14 @@ export function normalizeDatabase(input: any): Database {
         collectionInstructions: pickup.collectionInstructions ?? provider?.collectionInstructions ?? '',
         activity: Array.isArray(pickup.activity) ? pickup.activity : []
       };
-    })
+    }),
+    sessions: Array.isArray(raw.sessions) ? raw.sessions : [],
+    accountTokens: Array.isArray(raw.accountTokens) ? raw.accountTokens : [],
+    chatConversations: Array.isArray(raw.chatConversations) ? raw.chatConversations : [],
+    chatParticipants: Array.isArray(raw.chatParticipants) ? raw.chatParticipants : [],
+    chatMessages: Array.isArray(raw.chatMessages) ? raw.chatMessages : [],
+    chatAttachments: Array.isArray(raw.chatAttachments) ? raw.chatAttachments : [],
+    emailJobs: Array.isArray(raw.emailJobs) ? raw.emailJobs : []
   };
 }
 
@@ -164,7 +192,7 @@ export class FileRepository implements Repository {
     const raw = JSON.parse(await readFile(this.filePath, 'utf8'));
     const database = normalizeDatabase(raw);
     ensureLocalRecoveryDemos(database);
-    if (raw.schemaVersion !== 3 || database.accounts.length !== (raw.accounts ?? []).length) await this.write(database);
+    if (raw.schemaVersion !== 4 || database.accounts.length !== (raw.accounts ?? []).length) await this.write(database);
     return database;
   }
 
@@ -184,39 +212,98 @@ export class PostgresRepository implements Repository {
   private readonly pool: Pool;
   constructor(connectionString: string) { this.pool = new Pool({ connectionString }); }
 
+  private readonly tables = {
+    accounts: 'accounts', accessRequests: 'access_requests', organizationNameRequests: 'organization_name_requests', organizationTypes: 'organization_types',
+    auditEvents: 'audit_events', meals: 'meals', assignments: 'meal_assignments', logs: 'waste_logs', pickups: 'pickups', sessions: 'sessions',
+    accountTokens: 'account_tokens', chatConversations: 'chat_conversations', chatParticipants: 'chat_participants', chatMessages: 'chat_messages',
+    chatAttachments: 'chat_attachments', emailJobs: 'email_jobs'
+  } as const;
+
+  private entityId(key: keyof typeof this.tables, entity: any) {
+    if (key === 'sessions') return entity.tokenHash;
+    if (key === 'chatParticipants') return `${entity.conversationId}:${entity.accountId}`;
+    return entity.id;
+  }
+
+  private async readClient(client: PoolClient): Promise<Database> {
+    const state = normalizeDatabase({ schemaVersion: 4, organizationTypes: [] });
+    for (const [key, table] of Object.entries(this.tables) as Array<[keyof typeof this.tables, string]>) {
+      const result = await client.query<{ document: unknown }>(`SELECT document FROM ${table} ORDER BY id`);
+      (state[key] as unknown[]) = result.rows.map((row) => row.document);
+    }
+    return normalizeDatabase(state);
+  }
+
+  private async replaceAll(client: PoolClient, state: Database) {
+    for (const [key, table] of Object.entries(this.tables) as Array<[keyof typeof this.tables, string]>) {
+      await client.query(`DELETE FROM ${table}`);
+      for (const entity of state[key] as unknown as any[]) await client.query(`INSERT INTO ${table} (id, document) VALUES ($1, $2::jsonb)`, [this.entityId(key, entity), JSON.stringify(entity)]);
+    }
+    await client.query(`INSERT INTO bloom_meta (key, value) VALUES ('schema_version', '4') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  }
+
+  private verifyMigration(state: Database, expected?: Database) {
+    const codes = state.accounts.map((account) => account.accessCode.toUpperCase());
+    if (new Set(codes).size !== codes.length) throw new Error('Migration verification failed: duplicate access codes.');
+    const accountIds = new Set(state.accounts.map((account) => account.id)); const logIds = new Set(state.logs.map((log) => log.id));
+    if (state.meals.some((meal) => !accountIds.has(meal.providerId)) || state.assignments.some((assignment) => !accountIds.has(assignment.providerId)) || state.logs.some((log) => !accountIds.has(log.providerId))) throw new Error('Migration verification failed: provider ownership is incomplete.');
+    if (state.pickups.some((pickup) => !accountIds.has(pickup.providerId) || !logIds.has(pickup.wasteLogId))) throw new Error('Migration verification failed: pickup references are incomplete.');
+    if (expected && (state.accounts.length !== expected.accounts.length || state.pickups.length !== expected.pickups.length || state.logs.length !== expected.logs.length)) throw new Error('Migration verification failed: entity counts changed.');
+  }
+
   async initialize() {
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS bloom_state (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        document JSONB NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-      INSERT INTO bloom_state (id, document) VALUES (1, $1::jsonb) ON CONFLICT (id) DO NOTHING;
-    `, [JSON.stringify(seedDatabase())]);
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const result = await client.query<{ document: unknown }>('SELECT document FROM bloom_state WHERE id = 1 FOR UPDATE');
-      const raw = result.rows[0].document as any;
-      if (raw.schemaVersion !== 3) await client.query('UPDATE bloom_state SET document = $1::jsonb, updated_at = NOW() WHERE id = 1', [JSON.stringify(normalizeDatabase(raw))]);
+      await client.query(`SELECT pg_advisory_xact_lock(42656663);
+        CREATE TABLE IF NOT EXISTS bloom_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS access_requests (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS organization_name_requests (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS organization_types (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS audit_events (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS meals (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS meal_assignments (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS waste_logs (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS pickups (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS account_tokens (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS chat_conversations (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS chat_participants (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS chat_messages (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS chat_attachments (id TEXT PRIMARY KEY, document JSONB NOT NULL);
+        CREATE TABLE IF NOT EXISTS email_jobs (id TEXT PRIMARY KEY, document JSONB NOT NULL);`);
+      const version = await client.query(`SELECT value FROM bloom_meta WHERE key = 'schema_version'`);
+      if (!version.rowCount) {
+        const legacyTable = await client.query<{ name: string | null }>(`SELECT to_regclass('public.bloom_state')::text AS name`);
+        let source: Database;
+        if (legacyTable.rows[0]?.name) {
+          const legacy = await client.query<{ document: unknown }>('SELECT document FROM bloom_state WHERE id = 1');
+          source = legacy.rowCount ? normalizeDatabase(legacy.rows[0].document) : normalizeDatabase({ organizationTypes: seededOrganizationTypes() });
+        } else source = normalizeDatabase({ organizationTypes: seededOrganizationTypes() });
+        await this.replaceAll(client, source);
+        this.verifyMigration(await this.readClient(client), source);
+      }
       await client.query('COMMIT');
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }
   }
 
   async read() {
-    const result = await this.pool.query<{ document: Database }>('SELECT document FROM bloom_state WHERE id = 1');
-    return normalizeDatabase(result.rows[0].document);
+    const client = await this.pool.connect();
+    try { await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY'); const state = await this.readClient(client); await client.query('COMMIT'); return state; }
+    catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
   }
 
   async mutate<T>(work: (database: Database) => T): Promise<T> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const result = await client.query<{ document: Database }>('SELECT document FROM bloom_state WHERE id = 1 FOR UPDATE');
-      const database = normalizeDatabase(result.rows[0].document);
+      await client.query('SELECT pg_advisory_xact_lock(42656663)');
+      const database = await this.readClient(client);
       const value = work(database);
-      await client.query('UPDATE bloom_state SET document = $1::jsonb, updated_at = NOW() WHERE id = 1', [JSON.stringify(database)]);
+      await this.replaceAll(client, database);
       await client.query('COMMIT');
       return value;
     } catch (error) { await client.query('ROLLBACK'); throw error; }

@@ -1,0 +1,474 @@
+{
+  "schemaVersion": 3,
+  "organizationTypes": [
+    {
+      "id": "type-public-school",
+      "role": "FOOD_PROVIDER",
+      "name": "Public school",
+      "sortOrder": 0,
+      "active": true,
+      "createdAt": "2026-09-08T08:22:21.683Z",
+      "updatedAt": "2026-09-08T08:22:21.683Z"
+    },
+    {
+      "id": "type-private-school",
+      "role": "FOOD_PROVIDER",
+      "name": "Private school",
+      "sortOrder": 1,
+      "active": true,
+      "createdAt": "2026-09-08T08:22:21.683Z",
+      "updatedAt": "2026-09-08T08:36:41.594Z"
+    },
+    {
+      "id": "type-college",
+      "role": "FOOD_PROVIDER",
+      "name": "College / University",
+      "sortOrder": 2,
+      "active": true,
+      "createdAt": "2026-09-08T08:22:21.683Z",
+      "updatedAt": "2026-09-08T08:22:21.683Z"
+    },
+    {
+      "id": "type-small-restaurant",
+      "role": "FOOD_PROVIDER",
+      "name": "Small restaurant",
+      "sortOrder": 3,
+      "active": true,
+      "createdAt": "2026-09-08T08:22:21.683Z",
+      "updatedAt": "2026-09-08T08:22:21.683Z"
+    },
+    {
+      "id": "type-large-restaurant",
+      "role": "FOOD_PROVIDER",
+      "name": "Large restaurant",
+      "sortOrder": 4,
+      "active": true,
+      "createdAt": "2026-09-08T08:22:21.683Z",
+      "updatedAt": "2026-09-08T08:22:21.683Z"
+    },
+    {
+      "id": "type-community-kitchen",
+      "role": "FOOD_PROVIDER",
+      "name": "Community kitchen",
+      "sortOrder": 5,
+      "active": true,
+      "createdAt": "2026-09-08T08:22:21.683Z",
+      "updatedAt": "2026-09-08T08:22:21.683Z"
+    },
+    {
+      "id": "type-farmer",
+      "role": "FARMER_COLLECTOR",
+      "name": "Farmer / Livestock owner",
+      "sortOrder": 0,
+      "active": true,
+      "createdAt": "2026-09-08T08:22:21.683Z",
+      "updatedAt": "2026-09-08T08:22:21.683Z"
+    },
+    {
+      "id": "type-independent-collector",
+      "role": "FARMER_COLLECTOR",
+      "name": "Independent collector",
+      "sortOrder": 1,
+      "active": true,
+      "createdAt": "2026-09-08T08:22:21.683Z",
+      "updatedAt": "2026-09-08T08:22:21.683Z"
+    },
+    {
+      "id": "type-ngo-recovery",
+      "role": "FARMER_COLLECTOR",
+      "name": "NGO recovery service",
+      "sortOrder": 2,
+      "active": true,
+      "createdAt": "2026-09-08T08:22:21.683Z",
+      "updatedAt": "2026-09-08T08:22:21.683Z"
+    },
+    {
+      "id": "type-municipal-collector",
+      "role": "FARMER_COLLECTOR",
+      "name": "Municipal collector",
+      "sortOrder": 3,
+      "active": true,
+      "createdAt": "2026-09-08T08:22:21.683Z",
+      "updatedAt": "2026-09-08T08:22:21.683Z"
+    },
+    {
+      "id": "type-community-composter",
+      "role": "COMPOSTER",
+      "name": "Community composter",
+      "sortOrder": 0,
+      "active": true,
+      "createdAt": "2026-09-08T08:22:21.683Z",
+      "updatedAt": "2026-09-08T08:22:21.683Z"
+    },
+    {
+      "id": "type-commercial-compost",
+      "role": "COMPOSTER",
+      "name": "Commercial compost facility",
+      "sortOrder": 1,
+      "active": true,
+      "createdAt": "2026-09-08T08:22:21.683Z",
+      "updatedAt": "2026-09-08T08:22:21.683Z"
+    },
+    {
+      "id": "type-vermicompost",
+      "role": "COMPOSTER",
+      "name": "Vermicompost facility",
+      "sortOrder": 2,
+      "active": true,
+      "createdAt": "2026-09-08T08:22:21.683Z",
+      "updatedAt": "2026-09-08T08:22:21.683Z"
+    }
+  ],
+  "auditEvents": [
+    {
+      "id": "d996e547-f66b-4307-90ef-6de6ab9a54e5",
+      "actorId": "acct-admin",
+      "actorName": "District Administrator",
+      "createdAt": "2026-09-08T08:37:05.540Z",
+      "action": "REQUEST_APPROVED",
+      "objectType": "ACCESS_REQUEST",
+      "objectId": "request-demo",
+      "objectLabel": "Pudur Municipal School",
+      "summary": "Approved Public school access and created FPR-904B37."
+    },
+    {
+      "id": "d73c81f3-d10b-467a-a6ec-3408cdd325d1",
+      "actorId": "acct-admin",
+      "actorName": "District Administrator",
+      "createdAt": "2026-09-08T08:36:41.594Z",
+      "action": "ORGANIZATION_TYPE_UPDATED",
+      "objectType": "ORGANIZATION_TYPE",
+      "objectId": "type-private-school",
+      "objectLabel": "Private school",
+      "summary": "Updated signup option."
+    },
+    {
+      "id": "83361e7d-9e05-47f9-a008-06dfaceec004",
+      "actorId": "acct-admin",
+      "actorName": "District Administrator",
+      "createdAt": "2026-09-08T08:36:39.731Z",
+      "action": "ORGANIZATION_TYPE_UPDATED",
+      "objectType": "ORGANIZATION_TYPE",
+      "objectId": "type-private-school",
+      "objectLabel": "Private school",
+      "summary": "Updated signup option."
+    }
+  ],
+  "organizationNameRequests": [],
+  "accounts": [
+    {
+      "id": "acct-school-demo",
+      "role": "FOOD_PROVIDER",
+      "accessCode": "SCH-DEMO",
+      "passphraseHash": "93efa3b66cfd999fdcb72f0d06c1ff16:065e634726544f00453b02446b06fc0837dc0f169fa1fd7c439e042e8900c315",
+      "displayName": "Ananya Rao",
+      "organizationName": "Coimbatore Government School",
+      "firstLogin": false,
+      "createdAt": "2026-09-07T14:30:41.154Z",
+      "contact": "",
+      "status": "ACTIVE",
+      "organizationTypeId": "type-public-school",
+      "locality": "Coimbatore",
+      "collectionAddress": "Coimbatore",
+      "collectionInstructions": "Coimbatore"
+    },
+    {
+      "id": "acct-admin",
+      "role": "ADMIN",
+      "accessCode": "ADMIN-BLOOM",
+      "passphraseHash": "8aa8255eda563df2eacf6a73dd170d25:a12cf8ee75638195d8f029250cf65a88d37f3e8ed87b55c0824b1e63ecb347d0",
+      "displayName": "District Administrator",
+      "organizationName": "Coimbatore Food Recovery Office",
+      "firstLogin": false,
+      "createdAt": "2026-09-07T14:30:41.186Z",
+      "contact": "",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "05367ed2-7d47-4e68-a620-1c73588719e8",
+      "role": "FOOD_PROVIDER",
+      "accessCode": "FPR-904B37",
+      "passphraseHash": "75051a356ff265ee702660b9972accfd:4cec7e3920851cc2d9e65e90af2c4499a311da5d6b374d51df16982237cc0753",
+      "displayName": "Maya Krishnan",
+      "organizationName": "Pudur Municipal School",
+      "contact": "maya@example.org",
+      "organizationTypeId": "type-public-school",
+      "status": "ACTIVE",
+      "firstLogin": false,
+      "createdAt": "2026-09-08T08:37:05.540Z",
+      "locality": "",
+      "collectionAddress": "",
+      "collectionInstructions": ""
+    },
+    {
+      "id": "acct-farmer-demo",
+      "role": "FARMER_COLLECTOR",
+      "accessCode": "FCL-DEMO",
+      "displayName": "Karthik Mani",
+      "organizationName": "Coimbatore Recovery Collective",
+      "contact": "collector@example.org",
+      "organizationTypeId": "type-independent-collector",
+      "passphraseHash": "acf082990c44ca0915bb1f8f0bb6e02a:ff0fc5bcfaa98456253ff301e4243c6e6b6544f68ad2a6e8972a01347182e480",
+      "status": "ACTIVE",
+      "firstLogin": false,
+      "createdAt": "2026-09-09T05:07:22.171Z"
+    },
+    {
+      "id": "acct-composter-demo",
+      "role": "COMPOSTER",
+      "accessCode": "CMP-DEMO",
+      "displayName": "Meera Das",
+      "organizationName": "Noyyal Community Compost",
+      "contact": "compost@example.org",
+      "organizationTypeId": "type-community-composter",
+      "passphraseHash": "ff89a2f45aecdf285559665b3ffea471:49f5f114552980910362514c962c423fbd4c17602cf93c662c4a3d8a5a48aff5",
+      "status": "ACTIVE",
+      "firstLogin": false,
+      "createdAt": "2026-09-09T05:07:22.171Z"
+    }
+  ],
+  "accessRequests": [
+    {
+      "id": "request-demo",
+      "applicantName": "Maya Krishnan",
+      "role": "FOOD_PROVIDER",
+      "organizationName": "Pudur Municipal School",
+      "contact": "maya@example.org",
+      "note": "We serve 240 lunches each weekday.",
+      "status": "APPROVED",
+      "createdAt": "2026-09-07T14:30:41.186Z",
+      "organizationTypeId": "type-public-school",
+      "organizationTypeName": "Public school",
+      "reviewedAt": "2026-09-08T08:37:05.540Z",
+      "reviewedBy": "acct-admin"
+    }
+  ],
+  "meals": [
+    {
+      "id": "meal-tomato",
+      "name": "Tomato rice with pepper egg",
+      "createdAt": "2026-09-07T14:30:41.186Z",
+      "providerId": "acct-school-demo"
+    },
+    {
+      "id": "meal-biryani",
+      "name": "Vegetable biryani",
+      "createdAt": "2026-09-07T14:30:41.186Z",
+      "providerId": "acct-school-demo"
+    }
+  ],
+  "assignments": [
+    {
+      "id": "assign-today",
+      "date": "2026-09-07",
+      "mealIds": [],
+      "recurrence": {
+        "frequency": "WEEKLY",
+        "endDate": "2026-09-30"
+      },
+      "createdAt": "2026-09-07T14:30:41.186Z",
+      "providerId": "acct-school-demo"
+    },
+    {
+      "id": "a6eefe4a-11d2-4653-9907-4b0876036e07",
+      "date": "2026-09-14",
+      "mealIds": [],
+      "recurrence": {
+        "frequency": "WEEKLY",
+        "endDate": "2026-09-30"
+      },
+      "createdAt": "2026-09-07T15:21:49.467Z",
+      "providerId": "acct-school-demo"
+    },
+    {
+      "id": "78718c2f-798a-4bc6-a31f-88c7b9f2010f",
+      "date": "2026-09-21",
+      "mealIds": [],
+      "recurrence": {
+        "frequency": "WEEKLY",
+        "endDate": "2026-09-30"
+      },
+      "createdAt": "2026-09-07T15:21:49.467Z",
+      "providerId": "acct-school-demo"
+    },
+    {
+      "id": "d0602e34-82d0-429f-972d-3b5b05c20c8f",
+      "date": "2026-09-28",
+      "mealIds": [],
+      "recurrence": {
+        "frequency": "WEEKLY",
+        "endDate": "2026-09-30"
+      },
+      "createdAt": "2026-09-07T15:21:49.467Z",
+      "providerId": "acct-school-demo"
+    },
+    {
+      "id": "a6556472-ec4c-4aef-a13d-db6e2f0b58aa",
+      "providerId": "acct-school-demo",
+      "date": "2026-09-09",
+      "mealIds": [],
+      "recurrence": {
+        "frequency": "WEEKLY",
+        "endDate": "2026-09-30"
+      },
+      "createdAt": "2026-09-09T06:42:24.608Z"
+    },
+    {
+      "id": "b6160b62-ccbd-417a-ab64-26129f02c6ff",
+      "providerId": "acct-school-demo",
+      "date": "2026-09-16",
+      "mealIds": [],
+      "recurrence": {
+        "frequency": "NONE"
+      },
+      "createdAt": "2026-09-09T06:42:24.608Z"
+    },
+    {
+      "id": "0a987b58-5f8f-44ad-9ee7-f1f06572d511",
+      "providerId": "acct-school-demo",
+      "date": "2026-09-23",
+      "mealIds": [],
+      "recurrence": {
+        "frequency": "WEEKLY",
+        "endDate": "2026-09-30"
+      },
+      "createdAt": "2026-09-09T06:42:24.608Z"
+    },
+    {
+      "id": "c7eebf80-b570-42f1-894b-1a100cbdca09",
+      "providerId": "acct-school-demo",
+      "date": "2026-09-30",
+      "mealIds": [],
+      "recurrence": {
+        "frequency": "WEEKLY",
+        "endDate": "2026-09-30"
+      },
+      "createdAt": "2026-09-09T06:42:24.608Z"
+    },
+    {
+      "id": "da800b20-7372-4b43-87e5-a3589aa0fe56",
+      "providerId": "acct-school-demo",
+      "date": "2026-09-10",
+      "mealIds": [],
+      "recurrence": {
+        "frequency": "WEEKLY",
+        "endDate": "2026-09-30"
+      },
+      "createdAt": "2026-09-09T06:42:46.835Z"
+    },
+    {
+      "id": "4cb1406b-af3e-4e24-8a1c-251d31a90d61",
+      "providerId": "acct-school-demo",
+      "date": "2026-09-17",
+      "mealIds": [],
+      "recurrence": {
+        "frequency": "WEEKLY",
+        "endDate": "2026-09-30"
+      },
+      "createdAt": "2026-09-09T06:42:46.835Z"
+    },
+    {
+      "id": "3fe458e8-4247-409f-b1c0-4b6e57d0ef04",
+      "providerId": "acct-school-demo",
+      "date": "2026-09-24",
+      "mealIds": [],
+      "recurrence": {
+        "frequency": "WEEKLY",
+        "endDate": "2026-09-30"
+      },
+      "createdAt": "2026-09-09T06:42:46.835Z"
+    }
+  ],
+  "logs": [
+    {
+      "id": "0ab63ffb-366d-48e9-a38a-805c620e94ef",
+      "date": "2026-09-08",
+      "mealIds": [
+        "meal-tomato"
+      ],
+      "actualAttendance": 260,
+      "servingsPrepared": 275,
+      "leftoverKg": 5,
+      "reason": "LOW_ATTENDANCE",
+      "suitableForCollection": false,
+      "notes": "",
+      "createdAt": "2026-09-08T07:37:38.418Z",
+      "providerId": "acct-school-demo"
+    },
+    {
+      "id": "1168e172-ba80-491d-86c2-4c165f78c187",
+      "providerId": "acct-school-demo",
+      "date": "2026-09-09",
+      "mealIds": [
+        "meal-tomato"
+      ],
+      "actualAttendance": 260,
+      "servingsPrepared": 275,
+      "leftoverKg": 5,
+      "reason": "LOW_ATTENDANCE",
+      "suitableForCollection": true,
+      "notes": "",
+      "createdAt": "2026-09-09T05:29:43.567Z",
+      "pickupId": "edc75dab-637d-4dd3-8eb4-37da0a99cb25"
+    }
+  ],
+  "pickups": [
+    {
+      "id": "edc75dab-637d-4dd3-8eb4-37da0a99cb25",
+      "providerId": "acct-school-demo",
+      "providerName": "Coimbatore Government School",
+      "wasteLogId": "1168e172-ba80-491d-86c2-4c165f78c187",
+      "estimatedWeightKg": 5,
+      "eligibleRoles": [
+        "FARMER_COLLECTOR",
+        "COMPOSTER"
+      ],
+      "status": "COLLECTED",
+      "availableFrom": "2026-09-09T05:32:00.000Z",
+      "pickupDeadline": "2026-09-09T07:32:00.000Z",
+      "locality": "Coimbatore",
+      "collectionAddress": "Coimbatore",
+      "collectionInstructions": "Coimbatore",
+      "activity": [
+        {
+          "id": "bfe27e48-9a56-4d8f-af5d-f65720345f4e",
+          "actorId": "acct-farmer-demo",
+          "actorName": "Coimbatore Recovery Collective",
+          "fromStatus": "AVAILABLE",
+          "toStatus": "RESERVED",
+          "createdAt": "2026-09-09T05:33:22.584Z"
+        },
+        {
+          "id": "99291ace-1cb8-4fe2-887a-7d337fdbffd7",
+          "actorId": "acct-farmer-demo",
+          "actorName": "Coimbatore Recovery Collective",
+          "fromStatus": "RESERVED",
+          "toStatus": "IN_TRANSIT",
+          "createdAt": "2026-09-09T05:33:27.646Z"
+        },
+        {
+          "id": "e7ac46da-f40c-4970-8066-00237d17419a",
+          "actorId": "acct-farmer-demo",
+          "actorName": "Coimbatore Recovery Collective",
+          "fromStatus": "IN_TRANSIT",
+          "toStatus": "AWAITING_PROVIDER_CONFIRMATION",
+          "createdAt": "2026-09-09T05:33:29.503Z"
+        },
+        {
+          "id": "621b4b50-7d19-44cb-80ad-7d8a80dde376",
+          "actorId": "acct-school-demo",
+          "actorName": "Coimbatore Government School",
+          "fromStatus": "AWAITING_PROVIDER_CONFIRMATION",
+          "toStatus": "COLLECTED",
+          "createdAt": "2026-09-09T05:33:45.229Z"
+        }
+      ],
+      "createdAt": "2026-09-09T05:32:48.629Z",
+      "updatedAt": "2026-09-09T05:33:45.229Z",
+      "reservedByAccountId": "acct-farmer-demo",
+      "reservedByName": "Coimbatore Recovery Collective",
+      "reservedAt": "2026-09-09T05:33:22.584Z",
+      "reservationExpiresAt": "2026-09-09T06:03:22.584Z"
+    }
+  ]
+}

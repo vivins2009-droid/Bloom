@@ -24,6 +24,10 @@ export interface Account {
   displayName: string;
   organizationName: string;
   contact: string;
+  email?: string;
+  emailVerifiedAt?: string;
+  phone?: string;
+  contactNeedsReview?: boolean;
   organizationTypeId?: string;
   status: AccountStatus;
   firstLogin: boolean;
@@ -41,6 +45,7 @@ export interface AccessRequest {
   organizationTypeName: string;
   organizationName: string;
   contact: string;
+  email?: string;
   note: string;
   status: AccessRequestStatus;
   createdAt: string;
@@ -161,14 +166,15 @@ export type AdminAuditAction =
   | 'ORGANIZATION_TYPE_CREATED' | 'ORGANIZATION_TYPE_UPDATED' | 'ORGANIZATION_TYPE_ARCHIVED' | 'ORGANIZATION_TYPE_DELETED'
   | 'PICKUP_CANCELLED' | 'PICKUP_EXPIRED' | 'PICKUP_REOPENED'
   | 'ACCOUNT_HOLDER_UPDATED' | 'ACCOUNT_PASSPHRASE_CHANGED'
-  | 'ORGANIZATION_NAME_REQUESTED' | 'ORGANIZATION_NAME_APPROVED' | 'ORGANIZATION_NAME_REJECTED';
+  | 'ORGANIZATION_NAME_REQUESTED' | 'ORGANIZATION_NAME_APPROVED' | 'ORGANIZATION_NAME_REJECTED'
+  | 'CHAT_ADMIN_JOINED' | 'CHAT_MESSAGE_HIDDEN';
 
 export interface AdminAuditEvent {
   id: string;
   actorId: string;
   actorName: string;
   action: AdminAuditAction;
-  objectType: 'ACCESS_REQUEST' | 'ACCOUNT' | 'ORGANIZATION_TYPE' | 'ORGANIZATION_NAME_REQUEST' | 'PICKUP';
+  objectType: 'ACCESS_REQUEST' | 'ACCOUNT' | 'ORGANIZATION_TYPE' | 'ORGANIZATION_NAME_REQUEST' | 'PICKUP' | 'CHAT_CONVERSATION' | 'CHAT_MESSAGE';
   objectId: string;
   objectLabel: string;
   summary: string;
@@ -183,6 +189,68 @@ export interface AdminOverview {
   pickupExceptions: number;
   collectedKgLast30Days: number;
   recentActivity: AdminAuditEvent[];
+}
+
+export type ChatConversationType = 'PICKUP' | 'ADMIN_SUPPORT';
+export type ChatConversationState = 'OPEN' | 'READ_ONLY';
+
+export interface ChatConversation {
+  id: string;
+  type: ChatConversationType;
+  state: ChatConversationState;
+  organizationAccountId?: string;
+  pickupId?: string;
+  title: string;
+  participantAccountIds: string[];
+  adminJoinedAt?: string;
+  terminalAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  lastMessage?: ChatMessage;
+  unreadCount: number;
+}
+
+export interface ChatParticipant {
+  conversationId: string;
+  accountId: string;
+  joinedAt: string;
+  lastReadAt?: string;
+  lastReadMessageId?: string;
+}
+
+export interface ChatAttachment {
+  id: string;
+  conversationId: string;
+  messageId?: string;
+  objectKey: string;
+  mediaType: 'image/jpeg' | 'image/png' | 'image/webp';
+  width: number;
+  height: number;
+  byteSize: number;
+  createdAt: string;
+  expiresAt: string;
+  accessUrl?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  senderAccountId?: string;
+  senderOrganizationName: string;
+  senderDisplayName: string;
+  kind: 'MESSAGE' | 'SYSTEM' | 'MODERATION';
+  text: string;
+  attachmentIds: string[];
+  idempotencyKey: string;
+  hiddenAt?: string;
+  hiddenReason?: string;
+  createdAt: string;
+}
+
+export interface ChatEvent {
+  type: 'message.created' | 'conversation.updated' | 'receipt.updated' | 'pickup.updated' | 'session.revoked';
+  conversationId?: string;
+  payload?: unknown;
 }
 
 export interface ApiError {

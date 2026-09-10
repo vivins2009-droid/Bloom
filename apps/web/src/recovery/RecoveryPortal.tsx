@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle2, Clock3, History, Home, LogOut, MapPin, PackageOpen, Search, Settings, Truck } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock3, History, Home, LogOut, MapPin, MessageCircle, PackageOpen, Search, Settings, Truck } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import type { Account, Pickup, PickupStatus, RecoveryOverview } from '@bloom/contracts';
@@ -6,8 +6,9 @@ import { api } from '../api';
 import { ThemeButton } from '../auth';
 import { ConfirmDialog, Field, Notice, SelectField, Spinner } from '../components';
 import { AccountSettings } from '../settings/AccountSettings';
+import { ChatPage } from '../chat/ChatPage';
 
-const nav = [{ to: '/recovery/home', label: 'Home', icon: Home }, { to: '/recovery/available', label: 'Available', icon: Search }, { to: '/recovery/active', label: 'My pickup', icon: Truck }, { to: '/recovery', label: 'History', icon: History }, { to: '/recovery/settings', label: 'Settings', icon: Settings }];
+const nav = [{ to: '/recovery/home', label: 'Home', icon: Home }, { to: '/recovery/available', label: 'Available', icon: Search }, { to: '/recovery/active', label: 'My pickup', icon: Truck }, { to: '/recovery', label: 'History', icon: History }, { to: '/recovery/chat', label: 'Chat', icon: MessageCircle }, { to: '/recovery/settings', label: 'Settings', icon: Settings }];
 const statusLabel: Record<PickupStatus, string> = { AVAILABLE: 'Available', RESERVED: 'Reserved', IN_TRANSIT: 'In transit', AWAITING_PROVIDER_CONFIRMATION: 'Awaiting provider confirmation', COLLECTED: 'Collected', CANCELLED: 'Cancelled', EXPIRED: 'Expired' };
 const routeLabel = (pickup: Pickup) => pickup.eligibleRoles.length === 2 ? 'Farmer / Collector or Composter' : pickup.eligibleRoles[0] === 'COMPOSTER' ? 'Composter' : 'Farmer / Collector';
 const dateTime = (value: string) => new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(value));
@@ -24,6 +25,7 @@ export function RecoveryPortal({ account, onAccountChanged, onLogout }: { accoun
       <Route path="/recovery/available" element={<AvailablePickups account={account} onChanged={loadOverview} />} />
       <Route path="/recovery/active" element={<MyPickup onChanged={loadOverview} />} />
       <Route path="/recovery" element={<RecoveryHistory />} />
+      <Route path="/recovery/chat" element={<ChatPage account={account} />} />
       <Route path="/recovery/settings" element={<AccountSettings account={account} onAccountChanged={onAccountChanged} />} />
       <Route path="*" element={<Navigate to="/recovery/home" replace />} />
     </Routes></div>

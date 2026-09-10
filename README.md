@@ -41,7 +41,7 @@ The Recovery Partner demo accounts are added only by the explicitly configured f
 
 - **Request access:** food providers, farmer/collectors, and composters choose an administrator-managed organization type and submit an account request without exposing the administrator role.
 - **Operate the network:** administrators review applicants, manage organization types, control account access, oversee pickup exceptions, and inspect a visible audit record.
-- **Issue credentials safely:** approval, manual account creation, and passphrase resets reveal a generated access code and one-time passphrase once.
+- **Issue credentials safely:** local development can reveal a one-time passphrase; production approval and resets queue expiring single-use email links and never email plaintext passphrases.
 - **Sign in securely:** approved accounts use role-based sessions and must replace their one-time passphrase after the first sign-in.
 - **Plan servings:** Food Providers enter attendance, service date, and meal to receive a transparent serving recommendation.
 - **Manage meals:** Food Providers maintain a searchable meal library and assign multiple meals to calendar dates.
@@ -54,12 +54,14 @@ The Recovery Partner demo accounts are added only by the explicitly configured f
 - **Use recorded insights:** the tracker calculates leftovers per 100 attendees, meal and cause breakdowns, and a 30-day trend once enough dated records exist.
 - **Manage account details:** organization users can update the account-holder name and change their passphrase from Settings.
 - **Request organization-name changes:** organization users submit a named change request; an administrator approves or rejects it before the account is updated.
+- **Coordinate privately:** a provider and the recovery partner who reserves its pickup receive a shared conversation immediately. Every organization can open a private Admin support conversation; administrators can visibly join pickup conversations.
+- **Share images safely:** chat accepts up to four browser-sanitized JPEG, PNG, or WebP images per message. Private objects are returned only through short-lived bearer links after an authorization check.
 
 ## Food-provider workspace
 
 The Home page flows directly into a source-backed Dashboard overview. Its three preview cards show today's waste-log state, the next scheduled service, and the active pickup state before linking to the full workspace.
 
-The detailed Waste tracker keeps the serving calculator, service-record uploader, pickup publishing action, and recorded-data insights together. Meal calendar and Pickups remain separate focused workspaces. Every Food Provider subtype receives this same interface; subtype labels never alter operational routing or wording.
+The detailed Waste tracker keeps the serving calculator, service-record uploader, pickup publishing action, and recorded-data insights together. Meal calendar, Pickups, and Chat remain separate focused workspaces. Every Food Provider subtype receives this same interface; subtype labels never alter operational routing or wording.
 
 ## Recovery Partner workspace
 
@@ -83,15 +85,28 @@ Local development uses the file-backed repository only when `DATA_DRIVER=file` i
 | --- | --- | --- |
 | `DATA_DRIVER` | Selects `file` for local development or `postgres` for PostgreSQL. | Yes |
 | `PORT` | Sets the API port. The local default is `5002`. | Yes |
-| `WEB_ORIGIN` | Sets the permitted frontend origin. | Yes |
+| `WEB_ORIGINS` | Comma-separated production, preview, or staging frontend origins. | Yes |
 | `DATABASE_URL` | Provides the PostgreSQL connection string when `DATA_DRIVER=postgres`. | PostgreSQL only |
+| `CHAT_ENABLED` | Enables production chat after database, storage, email, and socket health checks pass. | Production chat |
+| `ATTACHMENT_DRIVER` | `file` locally or `r2` in production. | Yes |
+| `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Private Cloudflare R2 object storage. Never expose these to Vite. | Production images |
+| `ATTACHMENT_SIGNING_SECRET` | Signs five-minute image access links. | Production images |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Transactional setup, recovery, and throttled chat notification email. | Production email |
+| `API_PUBLIC_URL` | Public Railway API origin used in attachment links. | Production |
+| `VITE_API_URL` | Public API origin compiled into the Vercel frontend. It is not a secret. | Vercel |
 
-Passphrases are hashed. Sessions use HTTP-only cookies, expire automatically, and are checked against role authorization on protected API routes.
+Passphrases use versioned salted scrypt hashes. Opaque sessions are stored durably as token hashes, use Secure HTTP-only SameSite cookies in production, expire after 12 hours, and are checked against current account status. State-changing production requests require a rotating CSRF token. Login, access request, recovery, message, and image endpoints are rate-limited.
+
+PostgreSQL uses one table per entity group. On first production start, the idempotent importer reads a legacy schema-version-3 `bloom_state` document in one transaction, preserves its IDs and access codes, verifies normalization through repository reads, and leaves the old document untouched as rollback material. PostgreSQL failure is fatal; there is no file fallback.
+
+Chat uses REST for every committed mutation and an authenticated WebSocket for immediate update notifications. If the socket disconnects, the UI continues sending through REST and polls every 15 seconds while reconnecting. Messages and attachments expire after one year; the API runs daily cleanup. Pickup conversations become read-only seven days after their terminal state.
+
+The included `vercel.json` builds the Vite workspace as a single-page application. `railway.json` builds and runs the persistent Express/WebSocket service and checks `/api/health`. Configure separate databases, R2 buckets, Resend keys, and domains for development, staging, and production.
 
 ## Current scope
 
 - **Available now:** Food Provider, Recovery Partner, and administrator workspaces; role-aware authentication; dynamic access requests; service planning and logs; collection publishing; atomic reservation; handoff confirmation; and self-service account settings.
-- **Still deferred:** automatic credential delivery, Capacitor packaging, maps and geocoding, exports, SMS integrations, subtype-specific workflows, and deeper administrative analytics.
+- **Still deferred:** Capacitor packaging, maps and geocoding, exports, SMS and push notifications, subtype-specific workflows, and deeper administrative analytics.
 - **Not fabricated:** sparse datasets show an onboarding state instead of hard-coded trends, monetary claims, diversion figures, or reliability scores.
 
 ## License
