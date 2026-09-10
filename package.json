@@ -2,6 +2,9 @@
   "name": "bloom-v2",
   "private": true,
   "version": "0.1.0",
+  "engines": {
+  "node": ">=20.19.0 <21"
+},
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "concurrently -n api,web -c cyan,green \"npm run dev -w @bloom/api\" \"npm run dev -w @bloom/web\"",
