@@ -4,7 +4,8 @@ const configuredApiOrigin = (((import.meta as unknown as { env: Record<string, s
 // Production HTTP requests use Vercel's same-origin proxy. This keeps account
 // setup and sign-in available while the API remains on Railway and avoids
 // coupling browser access to Railway's deployment-specific CORS snapshot.
-const apiOrigin = window.location.hostname === 'bloom-co.in' ? '' : configuredApiOrigin;
+const usesProductionProxy = ['bloom-co.in', 'www.bloom-co.in'].includes(window.location.hostname);
+const apiOrigin = usesProductionProxy ? '' : configuredApiOrigin;
 let csrfToken = '';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
