@@ -76,6 +76,10 @@ Administrators can add, rename, reorder, enable, archive, or remove signup organ
 
 Organization-name requests appear alongside access requests in the administrator Requests workspace and become part of the audit history. Email and phone editing remain read-only for now because contact verification and delivery are not yet configured.
 
+### Administrator access
+
+Administrator credentials are intentionally not created or shared from the ordinary organization-account screen. Production creates the first administrator once from `BOOTSTRAP_ADMIN_EMAIL`, sends that person an expiring setup link, and records the creation in the audit history. Additional administrators currently require an operator-managed database change; administrators must never share one access code or passphrase. A future in-app administrator invitation flow should issue a separate account by email, require the inviting administrator to re-authenticate, and audit both the inviter and recipient.
+
 ## Access and data
 
 Local development uses the file-backed repository only when `DATA_DRIVER=file` is configured. Production is designed to use PostgreSQL and never falls back to a local file after a database error.

@@ -1,32 +1,27 @@
-const skippedRequestHeaders = new Set(['connection', 'content-length', 'host', 'origin', 'referer']);
+export const config = { runtime: 'edge' };
+
+const forwardedRequestHeaders = new Set(['accept', 'content-type', 'cookie', 'user-agent', 'x-csrf-token', 'x-forwarded-for']);
 const forwardedResponseHeaders = new Set(['content-type', 'set-cookie', 'x-csrf-token', 'x-trace-id']);
 
-export default async function handler(request, response) {
-  const path = Array.isArray(request.query.path) ? request.query.path.join('/') : request.query.path;
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(request.query)) {
-    if (key === 'path') continue;
-    for (const item of Array.isArray(value) ? value : [value]) query.append(key, item);
-  }
+export default async function handler(request) {
+  const incoming = new URL(request.url);
+  const path = incoming.searchParams.get('path') ?? '';
+  incoming.searchParams.delete('path');
 
-  const headers = {};
-  for (const [key, value] of Object.entries(request.headers)) {
-    if (!skippedRequestHeaders.has(key) && value !== undefined) headers[key] = value;
-  }
+  const headers = new Headers();
+  for (const [key, value] of request.headers) if (forwardedRequestHeaders.has(key)) headers.set(key, value);
 
   const hasBody = !['GET', 'HEAD'].includes(request.method);
-  const body = hasBody && request.body !== undefined
-    ? (typeof request.body === 'string' || Buffer.isBuffer(request.body) ? request.body : JSON.stringify(request.body))
-    : undefined;
-  const upstream = await fetch(`https://api.bloom-co.in/api/${path}${query.size ? `?${query}` : ''}`, {
+  const upstream = await fetch(`https://api.bloom-co.in/api/${path}${incoming.search}`, {
     method: request.method,
     headers,
-    body,
+    body: hasBody ? request.body : undefined,
     redirect: 'manual'
   });
 
-  for (const [key, value] of upstream.headers) {
-    if (forwardedResponseHeaders.has(key)) response.setHeader(key, value);
-  }
-  response.status(upstream.status).send(Buffer.from(await upstream.arrayBuffer()));
+  const responseHeaders = new Headers();
+  for (const [key, value] of upstream.headers) if (forwardedResponseHeaders.has(key)) responseHeaders.set(key, value);
+  responseHeaders.set('cache-control', 'private, no-store');
+  responseHeaders.set('x-content-type-options', 'nosniff');
+  return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
 }

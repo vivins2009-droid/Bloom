@@ -7,10 +7,25 @@ const configuredApiOrigin = (((import.meta as unknown as { env: Record<string, s
 const usesProductionProxy = ['bloom-co.in', 'www.bloom-co.in'].includes(window.location.hostname);
 const apiOrigin = usesProductionProxy ? '' : configuredApiOrigin;
 let csrfToken = '';
+const responseCache = new Map<string, { expiresAt: number; value: unknown }>();
+const pendingRequests = new Map<string, Promise<unknown>>();
+
+const cacheDuration = (path: string) => path === '/organization-types' ? 5 * 60_000 : 20_000;
+
+export function clearApiCache() {
+  responseCache.clear();
+  pendingRequests.clear();
+}
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method ?? 'GET').toUpperCase();
-  const response = await fetch(`${apiOrigin}/api${path}`, {
+  if (method === 'GET') {
+    const cached = responseCache.get(path);
+    if (cached && cached.expiresAt > Date.now()) return cached.value as T;
+    const pending = pendingRequests.get(path);
+    if (pending) return pending as Promise<T>;
+  }
+  const request = fetch(`${apiOrigin}/api${path}`, {
     ...init,
     credentials: 'include',
     headers: {
@@ -18,15 +33,22 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       ...(csrfToken && !['GET', 'HEAD'].includes(method) ? { 'X-CSRF-Token': csrfToken } : {}),
       ...init?.headers
     }
-  });
-  const nextCsrf = response.headers.get('x-csrf-token');
-  if (nextCsrf) csrfToken = nextCsrf;
-  if (!response.ok) {
-    const body = await response.json().catch(() => null) as ApiError | null;
-    throw new Error(body?.error.message || 'Bloom could not complete that request. Try again.');
-  }
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+  }).then(async (response) => {
+    const nextCsrf = response.headers.get('x-csrf-token');
+    if (nextCsrf) csrfToken = nextCsrf;
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as ApiError | null;
+      throw new Error(body?.error.message || 'Bloom could not complete that request. Try again.');
+    }
+    if (response.status === 204) return undefined as T;
+    return response.json() as Promise<T>;
+  }).then((value) => {
+    if (method === 'GET') responseCache.set(path, { expiresAt: Date.now() + cacheDuration(path), value });
+    else clearApiCache();
+    return value;
+  }).finally(() => { if (method === 'GET') pendingRequests.delete(path); });
+  if (method === 'GET') pendingRequests.set(path, request);
+  return request;
 }
 
 export const apiBaseUrl = apiOrigin;

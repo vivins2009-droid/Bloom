@@ -33,6 +33,8 @@ export interface Repository {
   mutate<T>(work: (database: Database) => T): Promise<T>;
 }
 
+type EntityCollectionKey = Exclude<keyof Database, 'schemaVersion'>;
+
 export const hashPassphrase = (passphrase: string) => {
   const salt = randomBytes(16).toString('hex');
   return `scrypt-v1:${salt}:${scryptSync(passphrase, salt, 32).toString('hex')}`;
@@ -250,9 +252,13 @@ export class PostgresRepository implements Repository {
 
   private async readClient(client: PoolClient): Promise<Database> {
     const state = normalizeDatabase({ schemaVersion: 5, organizationTypes: [] });
-    for (const [key, table] of Object.entries(this.tables) as Array<[keyof typeof this.tables, string]>) {
-      const result = await client.query<{ document: unknown }>(`SELECT document FROM ${table} ORDER BY id`);
-      (state[key] as unknown[]) = result.rows.map((row) => row.document);
+    const entries = Object.entries(this.tables) as Array<[EntityCollectionKey, string]>;
+    const result = await client.query<{ entity_type: EntityCollectionKey; document: unknown }>(
+      entries.map(([key, table]) => `SELECT '${key}' AS entity_type, document FROM ${table}`).join(' UNION ALL ')
+    );
+    for (const key of Object.keys(this.tables) as EntityCollectionKey[]) (state[key] as unknown[]) = [];
+    for (const row of result.rows) {
+      (state[row.entity_type] as unknown[]).push(row.document);
     }
     return normalizeDatabase(state);
   }
@@ -260,7 +266,13 @@ export class PostgresRepository implements Repository {
   private async replaceAll(client: PoolClient, state: Database) {
     for (const [key, table] of Object.entries(this.tables) as Array<[keyof typeof this.tables, string]>) {
       await client.query(`DELETE FROM ${table}`);
-      for (const entity of state[key] as unknown as any[]) await client.query(`INSERT INTO ${table} (id, document) VALUES ($1, $2::jsonb)`, [this.entityId(key, entity), JSON.stringify(entity)]);
+      const records = (state[key] as unknown as any[]).map((entity) => ({ id: this.entityId(key, entity), document: entity }));
+      if (records.length) {
+        await client.query(
+          `INSERT INTO ${table} (id, document) SELECT item->>'id', item->'document' FROM jsonb_array_elements($1::jsonb) AS item`,
+          [JSON.stringify(records)]
+        );
+      }
     }
     await client.query(`INSERT INTO bloom_meta (key, value) VALUES ('schema_version', '5') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
   }

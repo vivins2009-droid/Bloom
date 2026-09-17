@@ -16,6 +16,7 @@ import { bootstrapProductionAdmin } from './bootstrap.js';
 
 validateRuntimeConfig();
 const app = express();
+app.set('trust proxy', 1);
 const port = Number(process.env.PORT || 5002);
 const allowedOrigins = (process.env.WEB_ORIGINS || process.env.WEB_ORIGIN || 'http://localhost:5175').split(',').map((value) => value.trim()).filter(Boolean);
 const chatEnabled = process.env.NODE_ENV !== 'production' || process.env.CHAT_ENABLED === 'true';
@@ -27,8 +28,15 @@ const tokenHash = (value: string) => createHash('sha256').update(value).digest('
 const makeToken = () => randomBytes(32).toString('base64url');
 const rateBuckets = new Map<string, { count: number; resetsAt: number }>();
 const rateLimit = (name: string, max: number, windowMs: number) => (req: AuthedRequest, res: Response, next: NextFunction) => {
-  const now = Date.now(); const keys = [`${name}:ip:${req.ip}`, ...(req.account ? [`${name}:account:${req.account.id}`] : [])]; let blockedUntil = 0;
-  for (const key of keys) { const current = rateBuckets.get(key); const bucket = !current || current.resetsAt <= now ? { count: 0, resetsAt: now + windowMs } : current; bucket.count += 1; rateBuckets.set(key, bucket); if (bucket.count > max) blockedUntil = Math.max(blockedUntil, bucket.resetsAt); }
+  const now = Date.now();
+  if (rateBuckets.size >= 10_000) for (const [key, bucket] of rateBuckets) if (bucket.resetsAt <= now) rateBuckets.delete(key);
+  const keys = [`${name}:ip:${req.ip}`, ...(req.account ? [`${name}:account:${req.account.id}`] : [])]; let blockedUntil = 0;
+  for (const key of keys) {
+    const current = rateBuckets.get(key);
+    if (!current && rateBuckets.size >= 10_000) { blockedUntil = Math.max(blockedUntil, now + 60_000); continue; }
+    const bucket = !current || current.resetsAt <= now ? { count: 0, resetsAt: now + windowMs } : current;
+    bucket.count += 1; rateBuckets.set(key, bucket); if (bucket.count > max) blockedUntil = Math.max(blockedUntil, bucket.resetsAt);
+  }
   if (blockedUntil) { res.setHeader('Retry-After', String(Math.ceil((blockedUntil - now) / 1000))); res.status(429).json({ error: { code: 'RATE_LIMITED', message: 'Too many attempts. Wait a moment and try again.' } }); return; }
   next();
 };
@@ -260,7 +268,7 @@ app.post('/api/auth/request-password-reset', rateLimit('password-reset', 6, 3600
   res.status(202).json({ message: 'If that email belongs to an active Bloom account, a reset link has been queued.' });
 }));
 
-app.post('/api/auth/complete-account-link', asyncRoute(async (req, res) => {
+app.post('/api/auth/complete-account-link', rateLimit('account-link', 12, 15 * 60000), asyncRoute(async (req, res) => {
   const input = z.object({ token: z.string().min(20), passphrase: z.string().min(10).max(128), purpose: z.enum(['SETUP', 'RESET']) }).parse(req.body);
   const completed = await repository.mutate((db) => {
     const token = db.accountTokens.find((item) => item.tokenHash === tokenHash(input.token) && item.purpose === input.purpose && !item.usedAt && new Date(item.expiresAt).getTime() > Date.now()); if (!token) return false;

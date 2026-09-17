@@ -115,6 +115,19 @@ describe('admin operations API', () => {
     expect(reset.body.passphrase).toBeTruthy();
   });
 
+  it('does not expose administrator provisioning through the organization account endpoint', async () => {
+    const attempted = await asAdmin('/api/admin/accounts', { method: 'POST', body: JSON.stringify({ role: 'ADMIN', organizationTypeId: producerTypeId, displayName: 'Unexpected Admin', organizationName: 'Bloom Operations', contact: 'unexpected-admin@example.org' }) });
+    expect(attempted.response.status).toBe(422);
+    const accounts = await asAdmin('/api/admin/accounts');
+    expect(accounts.body.data.some((account: any) => account.role === 'ADMIN')).toBe(false);
+  });
+
+  it('rate limits repeated account-link attempts', async () => {
+    const attempts = [];
+    for (let index = 0; index < 13; index += 1) attempts.push(await request('/api/auth/complete-account-link', { method: 'POST', body: JSON.stringify({ token: `invalid-setup-token-${index}`, passphrase: 'long-enough-passphrase', purpose: 'SETUP' }) }));
+    expect(attempts.at(-1)?.response.status).toBe(429);
+  });
+
   it('constrains pickup overrides and records their reasons', async () => {
     const login = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ accessCode: 'FWP-DEMO', passphrase: 'bloom-producer' }) });
     const headers = { cookie: login.cookie };
