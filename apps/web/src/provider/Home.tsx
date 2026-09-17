@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, CalendarDays, ClipboardList, Scale } from 'lucide-react';
+import { ArrowRight, CalendarDays, ClipboardList, Plus, Scale } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { DailyWasteLog, MealAssignment, Pickup } from '@bloom/contracts';
 import { Link } from 'react-router-dom';
@@ -14,13 +14,9 @@ export function Home() {
   const todayLogs = overview?.logs.filter((log) => log.date === today()) ?? [];
   const nextMeal = overview?.assignments.filter((item) => item.date >= today()).sort((a, b) => a.date.localeCompare(b.date))[0];
   const activePickup = overview?.pickups.find((item) => activePickupStatuses.includes(item.status));
-  return <main className="home-page">
-    <section className="home-hero">
-      <div><p className="eyebrow">Food service, thoughtfully managed</p><h1 className="home-wordmark">Bloom</h1><p>Plan portions, record what comes back, and offer suitable leftovers for collection—all from one clear workflow.</p><a className="button button--primary" href="#dashboard-overview">View dashboard <ArrowDown size={17} /></a></div>
-      <div className="home-flow" aria-label="Bloom food service workflow"><span><b>01</b>Plan servings</span><i /><span><b>02</b>Record leftovers</span><i /><span><b>03</b>Publish pickup</span></div>
-    </section>
+  return <main className="page home-page dashboard-home">
+    <header className="page-heading dashboard-page-heading"><div><p className="eyebrow">Food Waste Producer</p><h1>Today’s overview</h1><p>Track today’s waste, prepare upcoming services, and coordinate collections.</p></div><Link className="button button--primary" to="/tracker"><Plus size={17} /> Record waste</Link></header>
     <section className="home-dashboard" id="dashboard-overview">
-      <header><div><p className="eyebrow">Workspace overview</p><h2>Dashboard</h2></div><p>See what needs attention, then open the right workspace.</p></header>
       <div className="dashboard-previews">
         <article><span className="preview-icon"><Scale size={21} /></span><p className="eyebrow">Waste tracker</p><h3>{!overview ? 'Checking today’s records…' : todayLogs.length ? `${todayLogs.reduce((sum, log) => sum + log.leftoverKg, 0)} kg across ${todayLogs.length} service${todayLogs.length === 1 ? '' : 's'}` : 'Today’s log is waiting'}</h3><p>{todayLogs.length ? `${todayLogs.reduce((sum, log) => sum + log.actualAttendance, 0)} attendees recorded today` : 'Calculate portions and record what comes back after each service.'}</p><Link to="/tracker">Open waste tracker <ArrowRight size={16} /></Link></article>
         <article className="dashboard-preview--calendar"><span className="preview-icon"><CalendarDays size={21} /></span><p className="eyebrow">Meal calendar</p><h3>{!overview ? 'Checking the schedule…' : nextMeal ? `Next service: ${formatDate(nextMeal.date, { day: 'numeric', month: 'long' })}` : 'No upcoming meals scheduled'}</h3><p>{nextMeal ? `${nextMeal.mealIds.length} meal${nextMeal.mealIds.length === 1 ? '' : 's'} assigned for this service.` : 'Add meals and assign them to upcoming service dates.'}</p><Link to="/calendar">Open meal calendar <ArrowRight size={16} /></Link></article>

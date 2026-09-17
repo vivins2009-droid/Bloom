@@ -30,14 +30,14 @@ describe('food provider domain', () => {
   });
 });
 
-const pickup = (status: Pickup['status'] = 'AVAILABLE'): Pickup => ({ id: 'p1', providerId: 'provider', providerName: 'Provider', wasteLogId: 'log', estimatedWeightKg: 5, eligibleRoles: ['FARMER_COLLECTOR'], status, availableFrom: '2026-09-09T09:00:00.000Z', pickupDeadline: '2026-09-09T12:00:00.000Z', locality: 'Coimbatore', collectionAddress: '12 Service Road', collectionInstructions: '', activity: [], createdAt: '2026-09-09T08:00:00.000Z', updatedAt: '2026-09-09T08:00:00.000Z' });
+const pickup = (status: Pickup['status'] = 'AVAILABLE'): Pickup => ({ id: 'p1', providerId: 'provider', providerName: 'Producer', wasteLogId: 'log', estimatedWeightKg: 5, eligibleRoles: ['FOOD_COLLECTOR'], status, availableFrom: '2026-09-09T09:00:00.000Z', pickupDeadline: '2026-09-09T12:00:00.000Z', locality: 'Coimbatore', collectionAddress: '12 Service Road', collectionInstructions: '', activity: [], createdAt: '2026-09-09T08:00:00.000Z', updatedAt: '2026-09-09T08:00:00.000Z' });
 
 describe('recovery pickup rules', () => {
   it('limits visibility to eligible recovery roles', () => {
     const item = pickup();
-    expect(roleCanRecoverPickup('FARMER_COLLECTOR', item)).toBe(true);
-    expect(roleCanRecoverPickup('COMPOSTER', item)).toBe(false);
-    expect(roleCanRecoverPickup('FOOD_PROVIDER', item)).toBe(false);
+    expect(roleCanRecoverPickup('FOOD_COLLECTOR', item)).toBe(true);
+    expect(roleCanRecoverPickup('FOOD_WASTE_PRODUCER', item)).toBe(false);
+    expect(roleCanRecoverPickup('ADMIN', item)).toBe(false);
   });
 
   it('returns an expired reservation to the available network before its deadline', () => {

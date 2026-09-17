@@ -3,7 +3,7 @@ import type { Account, DailyWasteLog, InsightSummary, Meal, Pickup, PickupStatus
 export const ACTIVE_PICKUP_STATUSES: PickupStatus[] = ['RESERVED', 'IN_TRANSIT', 'AWAITING_PROVIDER_CONFIRMATION'];
 
 export const roleCanRecoverPickup = (role: Account['role'], pickup: Pickup) =>
-  (role === 'FARMER_COLLECTOR' || role === 'COMPOSTER') && pickup.eligibleRoles.includes(role as RecoveryRole);
+  role === 'FOOD_COLLECTOR' && pickup.eligibleRoles.includes(role as RecoveryRole);
 
 export function reconcilePickup(pickup: Pickup, now = new Date()): boolean {
   const nowMs = now.getTime();

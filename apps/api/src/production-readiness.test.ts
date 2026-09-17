@@ -31,7 +31,7 @@ describe('production readiness', () => {
     expect(() => validateRuntimeConfig()).toThrow(/DATABASE_URL/);
   });
 
-  it('starts the core production API when deferred integrations are explicitly disabled', () => {
+  it('starts the production API with private document storage when chat and email are disabled', () => {
     process.env.NODE_ENV = 'production';
     process.env.DATA_DRIVER = 'postgres';
     process.env.DATABASE_URL = 'postgresql://example.invalid/bloom';
@@ -39,6 +39,12 @@ describe('production readiness', () => {
     process.env.API_PUBLIC_URL = 'https://api.example.org';
     process.env.CHAT_ENABLED = 'false';
     process.env.EMAIL_ENABLED = 'false';
+    process.env.ATTACHMENT_DRIVER = 'r2';
+    process.env.ATTACHMENT_SIGNING_SECRET = 'a-secure-signing-secret-with-32-characters';
+    process.env.R2_ACCOUNT_ID = 'account';
+    process.env.R2_BUCKET = 'bloom-private';
+    process.env.R2_ACCESS_KEY_ID = 'access-key';
+    process.env.R2_SECRET_ACCESS_KEY = 'secret-key';
     expect(() => validateRuntimeConfig()).not.toThrow();
   });
 
@@ -61,6 +67,12 @@ describe('production readiness', () => {
     process.env.API_PUBLIC_URL = 'https://api.example.org';
     process.env.CHAT_ENABLED = 'false';
     process.env.EMAIL_ENABLED = 'true';
+    process.env.ATTACHMENT_DRIVER = 'r2';
+    process.env.ATTACHMENT_SIGNING_SECRET = 'a-secure-signing-secret-with-32-characters';
+    process.env.R2_ACCOUNT_ID = 'account';
+    process.env.R2_BUCKET = 'bloom-private';
+    process.env.R2_ACCESS_KEY_ID = 'access-key';
+    process.env.R2_SECRET_ACCESS_KEY = 'secret-key';
     delete process.env.RESEND_API_KEY;
     delete process.env.EMAIL_FROM;
     expect(() => validateRuntimeConfig()).toThrow(/RESEND_API_KEY/);

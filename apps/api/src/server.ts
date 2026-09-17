@@ -8,7 +8,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import type { Account, AccountRole, AccessRequest, AdminAuditAction, ChatConversation, ChatMessage, DailyWasteLog, MealAssignment, Pickup, PickupStatus, PublicAccountRole, RecoveryRole } from '@bloom/contracts';
 import { ACTIVE_PICKUP_STATUSES, calculateInsights, calculateRecommendation, reconcilePickups, recurrenceDates, roleCanRecoverPickup } from './domain.js';
 import { createAccessCode, createPassphrase, createRepository, hashPassphrase, verifyPassphrase, type Repository } from './repository.js';
-import { deleteAttachment, getAttachment, putAttachment, sanitizeImage } from './storage.js';
+import { deleteAttachment, getAttachment, putAttachment, sanitizeImage, validateDocument } from './storage.js';
 import { processEmailQueue } from './email.js';
 import { cleanExpiredChatContent } from './retention.js';
 import { validateRuntimeConfig } from './config.js';
@@ -131,13 +131,23 @@ const rotateSession = async (accountId: string, res: Response) => {
   res.cookie('bloom_session', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: SESSION_MS }); res.setHeader('x-csrf-token', csrf);
 };
 
+const phoneSchema = z.string().trim().regex(/^\+[1-9]\d{7,14}$/, 'Enter a WhatsApp number in international format, such as +919876543210.');
 const requestSchema = z.object({
   applicantName: z.string().trim().min(2).max(80),
-  role: z.enum(['FOOD_PROVIDER', 'FARMER_COLLECTOR', 'COMPOSTER']),
+  role: z.enum(['FOOD_WASTE_PRODUCER', 'FOOD_COLLECTOR']),
   organizationTypeId: z.string().trim().min(1),
   organizationName: z.string().trim().min(2).max(120),
-  contact: z.string().trim().email().max(120),
-  note: z.string().trim().max(500).default('')
+  address: z.string().trim().min(8).max(300),
+  email: z.string().trim().email().max(120).transform((value) => value.toLowerCase()),
+  whatsapp: phoneSchema,
+  preferredContactMethod: z.enum(['EMAIL', 'WHATSAPP']),
+  weeklyWasteKg: z.number().positive().max(1_000_000).optional(),
+  hasTransportFacilities: z.boolean().optional(),
+  transportFacilities: z.string().trim().max(500).optional()
+}).superRefine((value, context) => {
+  if (value.role === 'FOOD_WASTE_PRODUCER' && value.weeklyWasteKg === undefined) context.addIssue({ code: 'custom', path: ['weeklyWasteKg'], message: 'Enter approximate weekly food waste.' });
+  if (value.role === 'FOOD_COLLECTOR' && value.hasTransportFacilities === undefined) context.addIssue({ code: 'custom', path: ['hasTransportFacilities'], message: 'Choose whether collection facilities are available.' });
+  if (value.role === 'FOOD_COLLECTOR' && value.hasTransportFacilities && !value.transportFacilities) context.addIssue({ code: 'custom', path: ['transportFacilities'], message: 'Describe the available collection facilities.' });
 });
 
 app.get('/api/health', asyncRoute(async (_req, res) => {
@@ -157,14 +167,17 @@ app.get('/api/organization-types', asyncRoute(async (_req, res) => {
   res.json({ data });
 }));
 
-app.post('/api/access-requests', rateLimit('access-request', 8, 3600000), asyncRoute(async (req, res) => {
+app.post('/api/access-requests/drafts', rateLimit('access-request', 8, 3600000), asyncRoute(async (req, res) => {
   const parsed = requestSchema.parse(req.body);
   const result = await repository.mutate((db) => {
     const organizationType = db.organizationTypes.find((item) => item.id === parsed.organizationTypeId && item.role === parsed.role && item.active);
     if (!organizationType) return { invalidType: true as const };
-    const duplicate = db.accessRequests.find((item) => item.contact.toLowerCase() === parsed.contact.toLowerCase() && item.status === 'PENDING');
+    const duplicate = db.accessRequests.find((item) => ['PENDING', 'UNDER_REVIEW'].includes(item.status) && (item.email.toLowerCase() === parsed.email || item.whatsapp === parsed.whatsapp));
     if (duplicate) return { duplicate };
-    const request: AccessRequest = { id: randomUUID(), ...parsed, email: parsed.contact, organizationTypeName: organizationType.name, status: 'PENDING', createdAt: new Date().toISOString() };
+    const request: AccessRequest = {
+      id: randomUUID(), ...parsed, contact: parsed.email, organizationTypeName: organizationType.name,
+      requiredDocuments: organizationType.documentRequirements.map((item) => ({ ...item })), documents: [], status: 'DRAFT', createdAt: new Date().toISOString()
+    };
     db.accessRequests.unshift(request);
     return { request };
   });
@@ -174,6 +187,54 @@ app.post('/api/access-requests', rateLimit('access-request', 8, 3600000), asyncR
     return;
   }
   res.status(201).json(result.request);
+}));
+
+app.post('/api/access-requests/:id/documents', rateLimit('access-document', 30, 3600000), asyncRoute(async (req, res) => {
+  const input = z.object({
+    requirementId: z.string().min(1), fileName: z.string().trim().min(1).max(180),
+    mediaType: z.enum(['application/pdf', 'image/jpeg', 'image/png']), dataUrl: z.string().max(14_100_000)
+  }).parse(req.body);
+  const draft = (await repository.read()).accessRequests.find((item) => item.id === req.params.id && item.status === 'DRAFT');
+  const requirement = draft?.requiredDocuments.find((item) => item.id === input.requirementId);
+  if (!draft || !requirement) { res.status(404).json({ error: { code: 'DRAFT_NOT_FOUND', message: 'That application draft or document requirement is unavailable.' } }); return; }
+  const encoded = input.dataUrl.includes(',') ? input.dataUrl.slice(input.dataUrl.indexOf(',') + 1) : input.dataUrl;
+  const content = Buffer.from(encoded, 'base64');
+  let mediaType: ReturnType<typeof validateDocument>;
+  try { mediaType = validateDocument(content, input.mediaType); }
+  catch (error) { res.status(422).json({ error: { code: 'INVALID_DOCUMENT', message: error instanceof Error ? error.message : 'The document is invalid.' } }); return; }
+  const id = randomUUID(); const extension = mediaType === 'application/pdf' ? 'pdf' : mediaType === 'image/png' ? 'png' : 'jpg';
+  const objectKey = `access-requests/${draft.id}/${id}.${extension}`;
+  await putAttachment(objectKey, content, mediaType);
+  try {
+    const document = await repository.mutate((db) => {
+      const request = db.accessRequests.find((item) => item.id === draft.id && item.status === 'DRAFT');
+      if (!request || !request.requiredDocuments.some((item) => item.id === requirement.id)) return null;
+      const previous = request.documents.find((item) => item.requirementId === requirement.id);
+      if (previous) request.documents = request.documents.filter((item) => item.id !== previous.id);
+      const item = { id, requestId: request.id, requirementId: requirement.id, requirementLabel: requirement.label, fileName: input.fileName, objectKey, mediaType, byteSize: content.byteLength, createdAt: new Date().toISOString() };
+      request.documents.push(item); return { item, previous };
+    });
+    if (!document) { await deleteAttachment(objectKey); res.status(409).json({ error: { code: 'DRAFT_CLOSED', message: 'This application draft is no longer editable.' } }); return; }
+    if (document.previous) await deleteAttachment(document.previous.objectKey);
+    const { objectKey: _objectKey, ...publicDocument } = document.item;
+    res.status(201).json(publicDocument);
+  } catch (error) { await deleteAttachment(objectKey); throw error; }
+}));
+
+app.post('/api/access-requests/:id/finalize', rateLimit('access-request', 8, 3600000), asyncRoute(async (req, res) => {
+  const result = await repository.mutate((db) => {
+    const request = db.accessRequests.find((item) => item.id === req.params.id && item.status === 'DRAFT');
+    if (!request) return { missing: true as const };
+    const type = db.organizationTypes.find((item) => item.id === request.organizationTypeId && item.role === request.role && item.active);
+    if (!type) return { invalidType: true as const };
+    const missing = request.requiredDocuments.filter((requirement) => requirement.required && !request.documents.some((document) => document.requirementId === requirement.id));
+    if (missing.length) return { missingDocuments: missing.map((item) => item.label) };
+    request.status = 'PENDING'; request.submittedAt = new Date().toISOString(); return { request };
+  });
+  if ('missing' in result) { res.status(404).json({ error: { code: 'DRAFT_NOT_FOUND', message: 'That application draft is unavailable.' } }); return; }
+  if ('invalidType' in result) { res.status(409).json({ error: { code: 'ORGANIZATION_TYPE_INACTIVE', message: 'That category stopped accepting applications before submission.' } }); return; }
+  if ('missingDocuments' in result && result.missingDocuments) { res.status(422).json({ error: { code: 'DOCUMENTS_REQUIRED', message: `Upload the required documents: ${result.missingDocuments.join(', ')}.` } }); return; }
+  res.status(201).json({ id: result.request.id, status: result.request.status, preferredContactMethod: result.request.preferredContactMethod });
 }));
 
 app.post('/api/auth/login', rateLimit('login', 12, 15 * 60000), asyncRoute(async (req, res) => {
@@ -246,7 +307,7 @@ app.patch('/api/account/profile', authenticate, asyncRoute(async (req, res) => {
   res.json(updated);
 }));
 
-app.patch('/api/account/collection-profile', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+app.patch('/api/account/collection-profile', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
   const input = z.object({
     locality: z.string().trim().min(2).max(100),
     collectionAddress: z.string().trim().min(8).max(240),
@@ -303,7 +364,8 @@ app.post('/api/account/organization-name-request', authenticate, asyncRoute(asyn
 
 app.get('/api/admin/access-requests', authenticate, requireRole('ADMIN'), asyncRoute(async (_req, res) => {
   const db = await repository.read();
-  res.json({ data: db.accessRequests, pagination: { page: 1, pageSize: db.accessRequests.length, totalItems: db.accessRequests.length, totalPages: 1 } });
+  const data = db.accessRequests.filter((item) => item.status !== 'DRAFT');
+  res.json({ data, pagination: { page: 1, pageSize: data.length, totalItems: data.length, totalPages: 1 } });
 }));
 
 app.get('/api/admin/organization-name-requests', authenticate, requireRole('ADMIN'), asyncRoute(async (_req, res) => {
@@ -340,15 +402,61 @@ app.post('/api/admin/organization-name-requests/:id/reject', authenticate, requi
   res.json(result);
 }));
 
+app.post('/api/admin/access-requests/:id/begin-review', authenticate, requireRole('ADMIN'), asyncRoute(async (req, res) => {
+  const result = await repository.mutate((db) => {
+    const request = db.accessRequests.find((item) => item.id === req.params.id);
+    if (!request || !['PENDING', 'UNDER_REVIEW'].includes(request.status)) return null;
+    if (request.status === 'UNDER_REVIEW') return request;
+    const now = new Date().toISOString(); request.status = 'UNDER_REVIEW'; request.reviewStartedAt = now; request.reviewedBy = req.account!.id; request.contactChannel = request.preferredContactMethod;
+    if (request.preferredContactMethod === 'EMAIL') {
+      request.contactedAt = now;
+      db.emailJobs.push({ id: randomUUID(), to: request.email, subject: 'Bloom is reviewing your application', text: `Hello ${request.applicantName},\n\nBloom has started reviewing the access request for ${request.organizationName}. We will contact you if anything else is needed. If approved, your secure account-setup link will arrive by email.`, attempts: 0, nextAttemptAt: now, createdAt: now });
+    }
+    addAudit(db, req.account!, { action: 'REQUEST_REVIEW_STARTED', objectType: 'ACCESS_REQUEST', objectId: request.id, objectLabel: request.organizationName, summary: request.preferredContactMethod === 'EMAIL' ? 'Started review and queued the acknowledgement email.' : 'Started review; manual WhatsApp contact is required.' });
+    return request;
+  });
+  if (!result) { res.status(409).json({ error: { code: 'REQUEST_NOT_REVIEWABLE', message: 'This request cannot be moved into review.' } }); return; }
+  res.json(result);
+}));
+
+app.post('/api/admin/access-requests/:id/mark-contacted', authenticate, requireRole('ADMIN'), asyncRoute(async (req, res) => {
+  const request = await repository.mutate((db) => {
+    const item = db.accessRequests.find((entry) => entry.id === req.params.id && entry.status === 'UNDER_REVIEW' && entry.preferredContactMethod === 'WHATSAPP');
+    if (!item) return null;
+    if (!item.contactedAt) {
+      item.contactedAt = new Date().toISOString(); item.contactChannel = 'WHATSAPP';
+      addAudit(db, req.account!, { action: 'REQUEST_CONTACTED', objectType: 'ACCESS_REQUEST', objectId: item.id, objectLabel: item.organizationName, summary: 'Recorded manual WhatsApp contact with the applicant.' });
+    }
+    return item;
+  });
+  if (!request) { res.status(409).json({ error: { code: 'WHATSAPP_CONTACT_UNAVAILABLE', message: 'This request is not waiting for manual WhatsApp contact.' } }); return; }
+  res.json(request);
+}));
+
+app.get('/api/admin/access-request-documents/:id/access', authenticate, requireRole('ADMIN'), asyncRoute(async (req, res) => {
+  const db = await repository.read(); const document = db.accessRequests.flatMap((item) => item.documents).find((item) => item.id === req.params.id);
+  if (!document) { res.status(404).json({ error: { code: 'DOCUMENT_NOT_FOUND', message: 'That verification document is unavailable.' } }); return; }
+  const expires = Date.now() + 5 * 60000; const signature = signAttachmentAccess(document.id, expires);
+  res.json({ url: `${process.env.API_PUBLIC_URL || ''}/api/access-request-documents/${document.id}/content?expires=${expires}&signature=${signature}`, expiresAt: new Date(expires).toISOString() });
+}));
+
+app.get('/api/access-request-documents/:id/content', asyncRoute(async (req, res) => {
+  const expires = Number(req.query.expires); const signature = String(req.query.signature || '');
+  if (!expires || expires < Date.now() || signature !== signAttachmentAccess(String(req.params.id), expires)) { res.status(403).end(); return; }
+  const document = (await repository.read()).accessRequests.flatMap((item) => item.documents).find((item) => item.id === req.params.id);
+  if (!document) { res.status(404).end(); return; }
+  const content = await getAttachment(document.objectKey); res.type(document.mediaType).setHeader('Content-Disposition', `inline; filename="${document.fileName.replace(/["\r\n]/g, '')}"`).setHeader('Cache-Control', 'private, max-age=300'); res.send(content);
+}));
+
 app.post('/api/admin/access-requests/:id/approve', authenticate, requireRole('ADMIN'), asyncRoute(async (req, res) => {
   const credentials = await repository.mutate((db) => {
     const request = db.accessRequests.find((item) => item.id === req.params.id);
-    if (!request || request.status !== 'PENDING') return null;
+    if (!request || request.status !== 'UNDER_REVIEW' || !request.contactedAt) return null;
     const organizationType = db.organizationTypes.find((item) => item.id === request.organizationTypeId && item.role === request.role && item.active);
     if (!organizationType) return { invalidType: true as const };
     const accessCode = createAccessCode(request.role, db.accounts);
     const passphrase = createPassphrase();
-    const account = { id: randomUUID(), role: request.role, accessCode, passphraseHash: hashPassphrase(passphrase), displayName: request.applicantName, organizationName: request.organizationName, contact: request.contact, email: request.email || request.contact, organizationTypeId: organizationType.id, status: 'ACTIVE' as const, firstLogin: true, createdAt: new Date().toISOString() };
+    const account = { id: randomUUID(), role: request.role, accessCode, passphraseHash: hashPassphrase(passphrase), displayName: request.applicantName, organizationName: request.organizationName, contact: request.email, email: request.email, phone: request.whatsapp, organizationTypeId: organizationType.id, address: request.address, weeklyWasteKg: request.weeklyWasteKg, hasTransportFacilities: request.hasTransportFacilities, transportFacilities: request.transportFacilities, collectionAddress: request.role === 'FOOD_WASTE_PRODUCER' ? request.address : undefined, status: 'ACTIVE' as const, firstLogin: true, createdAt: new Date().toISOString() };
     db.accounts.push(account);
     request.status = 'APPROVED';
     request.reviewedAt = new Date().toISOString();
@@ -357,7 +465,7 @@ app.post('/api/admin/access-requests/:id/approve', authenticate, requireRole('AD
     if (process.env.NODE_ENV === 'production') { const setup = queueAccountLink(db, publicAccount(account), 'SETUP', 24 * 60); return { accessCode, setupEmail: setup.email }; }
     return { accessCode, passphrase };
   });
-  if (!credentials) { res.status(409).json({ error: { code: 'REQUEST_NOT_PENDING', message: 'This request has already been reviewed.' } }); return; }
+  if (!credentials) { res.status(409).json({ error: { code: 'REQUEST_NOT_READY', message: 'Begin review and complete the preferred contact step before approval.' } }); return; }
   if ('invalidType' in credentials) { res.status(409).json({ error: { code: 'ORGANIZATION_TYPE_INACTIVE', message: 'Reassign this request to an active organization type before approving it.' } }); return; }
   res.json(credentials);
 }));
@@ -365,7 +473,7 @@ app.post('/api/admin/access-requests/:id/approve', authenticate, requireRole('AD
 app.patch('/api/admin/access-requests/:id/type', authenticate, requireRole('ADMIN'), asyncRoute(async (req, res) => {
   const { organizationTypeId } = z.object({ organizationTypeId: z.string().min(1) }).parse(req.body);
   const result = await repository.mutate((db) => {
-    const request = db.accessRequests.find((item) => item.id === req.params.id && item.status === 'PENDING');
+    const request = db.accessRequests.find((item) => item.id === req.params.id && ['PENDING', 'UNDER_REVIEW'].includes(item.status));
     if (!request) return null;
     const type = db.organizationTypes.find((item) => item.id === organizationTypeId && item.role === request.role && item.active);
     if (!type) return false;
@@ -381,7 +489,7 @@ app.post('/api/admin/access-requests/:id/reject', authenticate, requireRole('ADM
   const { reason } = z.object({ reason: z.string().trim().min(3).max(300) }).parse(req.body);
   const request = await repository.mutate((db) => {
     const item = db.accessRequests.find((entry) => entry.id === req.params.id);
-    if (!item || item.status !== 'PENDING') return null;
+    if (!item || !['PENDING', 'UNDER_REVIEW'].includes(item.status)) return null;
     item.status = 'REJECTED'; item.rejectionReason = reason; item.reviewedAt = new Date().toISOString(); item.reviewedBy = req.account!.id;
     addAudit(db, req.account!, { action: 'REQUEST_REJECTED', objectType: 'ACCESS_REQUEST', objectId: item.id, objectLabel: item.organizationName, summary: 'Rejected access request.', reason });
     return item;
@@ -390,7 +498,7 @@ app.post('/api/admin/access-requests/:id/reject', authenticate, requireRole('ADM
   res.json(request);
 }));
 
-const publicRoleSchema = z.enum(['FOOD_PROVIDER', 'FARMER_COLLECTOR', 'COMPOSTER']);
+const publicRoleSchema = z.enum(['FOOD_WASTE_PRODUCER', 'FOOD_COLLECTOR']);
 const accountInputSchema = z.object({
   role: publicRoleSchema,
   organizationTypeId: z.string().min(1),
@@ -403,7 +511,7 @@ app.get('/api/admin/overview', authenticate, requireRole('ADMIN'), asyncRoute(as
   const db = await repository.read();
   const since = Date.now() - 30 * 86400000;
   res.json({
-    pendingRequests: db.accessRequests.filter((item) => item.status === 'PENDING').length,
+    pendingRequests: db.accessRequests.filter((item) => item.status === 'PENDING' || item.status === 'UNDER_REVIEW').length,
     pendingNameChanges: db.organizationNameRequests.filter((item) => item.status === 'PENDING').length,
     activeOrganizations: db.accounts.filter((item) => item.role !== 'ADMIN' && item.status === 'ACTIVE').length,
     pickupExceptions: db.pickups.filter((item) => item.status === 'CANCELLED' || item.status === 'EXPIRED' || (item.status === 'IN_TRANSIT' && new Date(item.pickupDeadline).getTime() < Date.now())).length,
@@ -483,8 +591,12 @@ app.get('/api/admin/organization-types', authenticate, requireRole('ADMIN'), asy
   const db = await repository.read(); res.json({ data: db.organizationTypes.sort((a, b) => a.role.localeCompare(b.role) || a.sortOrder - b.sortOrder) });
 }));
 
+const documentRequirementsSchema = z.array(z.object({
+  id: z.string().optional(), label: z.string().trim().min(2).max(80), required: z.boolean().default(true), sortOrder: z.number().int().min(0)
+})).max(12).transform((items) => items.map((item, index) => ({ ...item, id: item.id || randomUUID(), sortOrder: index })));
+
 app.post('/api/admin/organization-types', authenticate, requireRole('ADMIN'), asyncRoute(async (req, res) => {
-  const input = z.object({ role: publicRoleSchema, name: z.string().trim().min(2).max(60) }).parse(req.body);
+  const input = z.object({ role: publicRoleSchema, name: z.string().trim().min(2).max(60), documentRequirements: documentRequirementsSchema.default([]) }).parse(req.body);
   const result = await repository.mutate((db) => {
     if (db.organizationTypes.some((item) => item.role === input.role && item.name.toLowerCase() === input.name.toLowerCase())) return null;
     const siblings = db.organizationTypes.filter((item) => item.role === input.role);
@@ -498,12 +610,12 @@ app.post('/api/admin/organization-types', authenticate, requireRole('ADMIN'), as
 }));
 
 app.patch('/api/admin/organization-types/:id', authenticate, requireRole('ADMIN'), asyncRoute(async (req, res) => {
-  const input = z.object({ name: z.string().trim().min(2).max(60).optional(), active: z.boolean().optional(), sortOrder: z.number().int().min(0).optional() }).refine((value) => Object.keys(value).length > 0).parse(req.body);
+  const input = z.object({ name: z.string().trim().min(2).max(60).optional(), active: z.boolean().optional(), sortOrder: z.number().int().min(0).optional(), documentRequirements: documentRequirementsSchema.optional() }).refine((value) => Object.keys(value).length > 0).parse(req.body);
   const result = await repository.mutate((db) => {
     const type = db.organizationTypes.find((item) => item.id === req.params.id); if (!type) return null;
     if (input.name && db.organizationTypes.some((item) => item.id !== type.id && item.role === type.role && item.name.toLowerCase() === input.name!.toLowerCase())) return false;
     const requestedOrder = input.sortOrder;
-    Object.assign(type, { name: input.name ?? type.name, active: input.active ?? type.active, updatedAt: new Date().toISOString() });
+    Object.assign(type, { name: input.name ?? type.name, active: input.active ?? type.active, documentRequirements: input.documentRequirements ?? type.documentRequirements, updatedAt: new Date().toISOString() });
     if (requestedOrder !== undefined) {
       const siblings = db.organizationTypes.filter((item) => item.role === type.role && item.id !== type.id).sort((a, b) => a.sortOrder - b.sortOrder);
       siblings.splice(Math.min(requestedOrder, siblings.length), 0, type);
@@ -534,12 +646,12 @@ app.get('/api/admin/audit-events', authenticate, requireRole('ADMIN'), asyncRout
   const db = await repository.read(); res.json({ data: db.auditEvents });
 }));
 
-app.get('/api/meals', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+app.get('/api/meals', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
   const db = await repository.read();
   res.json({ data: db.meals.filter((meal) => meal.providerId === req.account!.id), pagination: { page: 1, pageSize: 100, totalItems: db.meals.length, totalPages: 1 } });
 }));
 
-app.post('/api/meals', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+app.post('/api/meals', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
   const { name } = z.object({ name: z.string().trim().min(2).max(140) }).parse(req.body);
   const meal = await repository.mutate((db) => {
     if (db.meals.some((item) => item.providerId === req.account!.id && item.name.toLowerCase() === name.toLowerCase())) return null;
@@ -550,7 +662,7 @@ app.post('/api/meals', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(as
   res.status(201).json(meal);
 }));
 
-app.delete('/api/meals/:id', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+app.delete('/api/meals/:id', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
   const removed = await repository.mutate((db) => {
     const before = db.meals.length;
     db.meals = db.meals.filter((meal) => meal.id !== req.params.id || meal.providerId !== req.account!.id);
@@ -561,13 +673,13 @@ app.delete('/api/meals/:id', authenticate, requireRole('FOOD_PROVIDER'), asyncRo
   res.status(204).end();
 }));
 
-app.get('/api/meal-assignments', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+app.get('/api/meal-assignments', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
   const db = await repository.read();
   const data = db.assignments.filter((item) => item.providerId === req.account!.id);
   res.json({ data, pagination: { page: 1, pageSize: 100, totalItems: data.length, totalPages: 1 } });
 }));
 
-app.post('/api/meal-assignments', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+app.post('/api/meal-assignments', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
   const input = z.object({ date: z.iso.date(), mealIds: z.array(z.string()).min(1), recurrence: z.object({ frequency: z.enum(['NONE', 'WEEKLY', 'BIWEEKLY']), endDate: z.iso.date().optional() }) }).parse(req.body);
   const assignments = await repository.mutate((db) => recurrenceDates(input.date, input.recurrence.frequency, input.recurrence.endDate).map((date) => {
     const existing = db.assignments.find((item) => item.providerId === req.account!.id && item.date === date);
@@ -578,18 +690,18 @@ app.post('/api/meal-assignments', authenticate, requireRole('FOOD_PROVIDER'), as
   res.status(201).json({ data: assignments });
 }));
 
-app.post('/api/recommendations', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+app.post('/api/recommendations', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
   const input = z.object({ expectedAttendance: z.number().int().min(1).max(5000), mealIds: z.array(z.string()).min(1) }).parse(req.body);
   const db = await repository.read();
   res.json(calculateRecommendation({ ...input, logs: db.logs.filter((log) => log.providerId === req.account!.id) }));
 }));
 
-app.get('/api/waste-logs', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+app.get('/api/waste-logs', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
   const db = await repository.read(); const data = db.logs.filter((log) => log.providerId === req.account!.id).sort((a, b) => b.date.localeCompare(a.date));
   res.json({ data, pagination: { page: 1, pageSize: 100, totalItems: data.length, totalPages: 1 } });
 }));
 
-app.post('/api/waste-logs', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+app.post('/api/waste-logs', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
   const input = z.object({ date: z.iso.date(), mealIds: z.array(z.string()).min(1), actualAttendance: z.number().int().min(1), servingsPrepared: z.number().int().min(1), leftoverKg: z.number().min(0).max(500), reason: z.enum(['LOW_ATTENDANCE', 'MENU_PREFERENCE', 'OVERPRODUCTION', 'PREPARATION_WASTE', 'OTHER']), suitableForCollection: z.boolean(), notes: z.string().trim().max(500) }).parse(req.body);
   const result = await repository.mutate((db) => {
     const log: DailyWasteLog = { id: randomUUID(), providerId: req.account!.id, ...input, createdAt: new Date().toISOString() };
@@ -601,7 +713,7 @@ app.post('/api/waste-logs', authenticate, requireRole('FOOD_PROVIDER'), asyncRou
 const editableLogInput = z.object({ date: z.iso.date(), mealIds: z.array(z.string()).min(1), actualAttendance: z.number().int().min(1), servingsPrepared: z.number().int().min(1), leftoverKg: z.number().min(0).max(500), reason: z.enum(['LOW_ATTENDANCE', 'MENU_PREFERENCE', 'OVERPRODUCTION', 'PREPARATION_WASTE', 'OTHER']), suitableForCollection: z.boolean(), notes: z.string().trim().max(500) });
 const lockedPickupStatuses: PickupStatus[] = ['RESERVED', 'IN_TRANSIT', 'AWAITING_PROVIDER_CONFIRMATION', 'COLLECTED'];
 
-app.put('/api/waste-logs/:id', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+app.put('/api/waste-logs/:id', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
   const input = editableLogInput.parse(req.body);
   const result = await repository.mutate((db) => {
     const log = db.logs.find((item) => item.id === req.params.id && item.providerId === req.account!.id);
@@ -618,7 +730,7 @@ app.put('/api/waste-logs/:id', authenticate, requireRole('FOOD_PROVIDER'), async
   res.json(result.log);
 }));
 
-app.delete('/api/waste-logs/:id', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+app.delete('/api/waste-logs/:id', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
   const result = await repository.mutate((db) => {
     const index = db.logs.findIndex((item) => item.id === req.params.id && item.providerId === req.account!.id);
     if (index < 0) return 'missing' as const;
@@ -634,12 +746,12 @@ app.delete('/api/waste-logs/:id', authenticate, requireRole('FOOD_PROVIDER'), as
   res.status(204).end();
 }));
 
-app.get('/api/insights', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+app.get('/api/insights', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
   const db = await repository.read();
   res.json(calculateInsights(db.logs.filter((log) => log.providerId === req.account!.id), db.meals.filter((meal) => meal.providerId === req.account!.id)));
 }));
 
-app.get('/api/pickups', authenticate, requireRole('FOOD_PROVIDER', 'ADMIN'), asyncRoute(async (req, res) => {
+app.get('/api/pickups', authenticate, requireRole('FOOD_WASTE_PRODUCER', 'ADMIN'), asyncRoute(async (req, res) => {
   const data = await repository.mutate((db) => {
     reconcilePickups(db.pickups);
     return req.account!.role === 'ADMIN' ? db.pickups : db.pickups.filter((pickup) => pickup.providerId === req.account!.id);
@@ -647,9 +759,9 @@ app.get('/api/pickups', authenticate, requireRole('FOOD_PROVIDER', 'ADMIN'), asy
   res.json({ data, pagination: { page: 1, pageSize: 100, totalItems: data.length, totalPages: 1 } });
 }));
 
-app.post('/api/waste-logs/:id/publish-pickup', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+app.post('/api/waste-logs/:id/publish-pickup', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
   const input = z.object({
-    eligibleRoles: z.array(z.enum(['FARMER_COLLECTOR', 'COMPOSTER'])).min(1).max(2).transform((roles) => [...new Set(roles)] as RecoveryRole[]),
+    eligibleRoles: z.array(z.literal('FOOD_COLLECTOR')).min(1).max(1).transform(() => ['FOOD_COLLECTOR'] as RecoveryRole[]),
     availableFrom: z.iso.datetime(),
     pickupDeadline: z.iso.datetime(),
     instructions: z.string().trim().max(400).default('')
@@ -678,7 +790,7 @@ app.post('/api/waste-logs/:id/publish-pickup', authenticate, requireRole('FOOD_P
   res.status(201).json(result.pickup);
 }));
 
-app.post('/api/pickups/:id/confirm', authenticate, requireRole('FOOD_PROVIDER'), asyncRoute(async (req, res) => {
+app.post('/api/pickups/:id/confirm', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
   const pickup = await repository.mutate((db) => {
     reconcilePickups(db.pickups);
     const item = db.pickups.find((entry) => entry.id === req.params.id && entry.providerId === req.account!.id);
@@ -692,7 +804,7 @@ app.post('/api/pickups/:id/confirm', authenticate, requireRole('FOOD_PROVIDER'),
   res.json(pickup);
 }));
 
-const recoveryRoles: AccountRole[] = ['FARMER_COLLECTOR', 'COMPOSTER'];
+const recoveryRoles: AccountRole[] = ['FOOD_COLLECTOR'];
 const addPickupEvent = (pickup: Pickup, actor: Account, toStatus: PickupStatus, reason?: string) => {
   const now = new Date().toISOString();
   pickup.activity.push({ id: randomUUID(), actorId: actor.id, actorName: actor.organizationName, fromStatus: pickup.status, toStatus, reason, createdAt: now });

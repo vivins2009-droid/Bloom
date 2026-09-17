@@ -17,9 +17,9 @@ export function AuthPage({ onAuthenticated }: { onAuthenticated: (account: Accou
   return <main className="auth-page">
     <div className="auth-top"><a className="wordmark" href="/"><span className="brand-mark">b</span><span>Bloom</span></a><ThemeButton /></div>
     <section className="auth-story">
-      <p className="eyebrow">Food service, thoughtfully managed</p>
+      <p className="eyebrow">Private food recovery, coordinated</p>
       <h1>Bloom</h1>
-      <p>Plan every service with confidence, understand what comes back, and connect useful surplus with local recovery partners.</p>
+      <p>Measure food waste, publish collections, and coordinate trusted handoffs between verified organizations.</p>
       <div className="auth-flow" aria-label="Bloom workflow"><span>Plan</span><i /><span>Record</span><i /><span>Recover</span></div>
     </section>
     <section className="auth-panel">
@@ -42,40 +42,53 @@ function SignIn({ onAuthenticated, onRecovery }: { onAuthenticated: (account: Ac
     finally { setBusy(false); }
   };
   return <form className="auth-form" onSubmit={submit}>
-    <header><p className="eyebrow">Welcome back</p><h2>Open your workspace</h2><p>Use the credentials assigned by the district administrator.</p></header>
+    <header><p className="eyebrow">Welcome back</p><h2>Open your workspace</h2><p>Use the credentials assigned by the Bloom administrator.</p></header>
     {error && <Notice tone="error">{error}</Notice>}
-    <Field label="Access code"><input autoComplete="username" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} placeholder="e.g. SCH-8F2A1C" required /></Field>
+    <Field label="Access code"><input autoComplete="username" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} placeholder="e.g. FWP-8F2A1C" required /></Field>
     <Field label="Passphrase"><span className="password-field"><input type={show ? 'text' : 'password'} autoComplete="current-password" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} placeholder="Enter your passphrase" required /><button type="button" onClick={() => setShow((value) => !value)} aria-label={show ? 'Hide passphrase' : 'Show passphrase'}>{show ? <EyeOff size={17} /> : <Eye size={17} />}</button></span></Field>
     <button className="button button--primary button--wide" disabled={busy}>{busy && <i className="button-spinner" />}{busy ? 'Signing in' : 'Sign in'}<ArrowRight size={17} /></button>
     <button type="button" className="text-link auth-recovery-link" onClick={onRecovery}>Forgot your passphrase?</button>
-    <p className="demo-note">Local demo: <code>SCH-DEMO</code> / <code>bloom-school</code></p>
+    <p className="demo-note">Local demo: <code>FWP-DEMO</code> / <code>bloom-producer</code></p>
   </form>;
 }
 
 function RequestAccess({ onBack }: { onBack: () => void }) {
-  const [form, setForm] = useState({ applicantName: '', role: 'FOOD_PROVIDER' as PublicAccountRole, organizationTypeId: '', organizationName: '', contact: '', note: '' });
+  const [form, setForm] = useState({ applicantName: '', role: 'FOOD_WASTE_PRODUCER' as PublicAccountRole, organizationTypeId: '', organizationName: '', address: '', email: '', whatsapp: '+91', preferredContactMethod: 'EMAIL', weeklyWasteKg: '', hasTransportFacilities: '', transportFacilities: '' });
+  const [files, setFiles] = useState<Record<string, File>>({});
   const [types, setTypes] = useState<OrganizationType[]>([]); const [loadingTypes, setLoadingTypes] = useState(true);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [sent, setSent] = useState(false);
   const loadTypes = () => { setLoadingTypes(true); setError(''); api<{ data: OrganizationType[] }>('/organization-types').then(({ data }) => { setTypes(data); setForm((current) => ({ ...current, organizationTypeId: data.find((item) => item.role === current.role)?.id ?? '' })); }).catch((reason) => setError(reason instanceof Error ? reason.message : 'Signup options could not be loaded.')).finally(() => setLoadingTypes(false)); };
   useEffect(loadTypes, []);
   const change = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const changeRole = (role: PublicAccountRole) => setForm((current) => ({ ...current, role, organizationTypeId: types.find((item) => item.role === role)?.id ?? '' }));
+  const selectedType = types.find((item) => item.id === form.organizationTypeId);
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError('');
-    try { await api('/access-requests', { method: 'POST', body: JSON.stringify(form) }); setSent(true); }
+    try {
+      const draft = await api<{ id: string }>('/access-requests/drafts', { method: 'POST', body: JSON.stringify({ ...form, weeklyWasteKg: form.role === 'FOOD_WASTE_PRODUCER' ? Number(form.weeklyWasteKg) : undefined, hasTransportFacilities: form.role === 'FOOD_COLLECTOR' ? form.hasTransportFacilities === 'yes' : undefined, transportFacilities: form.role === 'FOOD_COLLECTOR' && form.hasTransportFacilities === 'yes' ? form.transportFacilities : undefined }) });
+      for (const requirement of selectedType?.documentRequirements ?? []) {
+        const file = files[requirement.id]; if (!file) continue;
+        const dataUrl = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error(`Could not read ${file.name}.`)); reader.readAsDataURL(file); });
+        await api(`/access-requests/${draft.id}/documents`, { method: 'POST', body: JSON.stringify({ requirementId: requirement.id, fileName: file.name, mediaType: file.type, dataUrl }) });
+      }
+      await api(`/access-requests/${draft.id}/finalize`, { method: 'POST' }); setSent(true);
+    }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'The request could not be sent.'); }
     finally { setBusy(false); }
   };
-  if (sent) return <div className="auth-success"><CheckCircle2 size={34} /><p className="eyebrow">Request received</p><h2>Your request is with the district team.</h2><p>An administrator will review your organization. If approved, Bloom will email a secure account-setup link.</p><button className="button button--quiet" onClick={onBack}><ArrowLeft size={16} /> Return to sign in</button></div>;
+  if (sent) return <div className="auth-success"><CheckCircle2 size={34} /><p className="eyebrow">Request received</p><h2>Your application is with Bloom.</h2><p>When review begins, watch your preferred contact channel. If approved, your secure account-setup link will always arrive by email.</p><button className="button button--quiet" onClick={onBack}><ArrowLeft size={16} /> Return to sign in</button></div>;
   return <form className="auth-form" onSubmit={submit}>
-    <header><p className="eyebrow">Join the network</p><h2>Request an account</h2><p>Tell the district team who you are. Operational details come after approval.</p></header>
+    <header><p className="eyebrow">Join the private network</p><h2>Request an account</h2><p>Share the operational and verification details Bloom needs to review your organization.</p></header>
     {error && <Notice tone="error">{error} {loadingTypes ? null : <button type="button" className="notice-link" onClick={loadTypes}>Try again</button>}</Notice>}
-    <div className="field-grid"><Field label="Your name"><input value={form.applicantName} onChange={(e) => change('applicantName', e.target.value)} required /></Field><Field label="Account role"><SelectField value={form.role} onChange={(e) => changeRole(e.target.value as PublicAccountRole)} aria-label="Account role">{([['FOOD_PROVIDER', 'Food provider'], ['FARMER_COLLECTOR', 'Farmer / Collector'], ['COMPOSTER', 'Composter']] as const).map(([value, label]) => <option key={value} value={value}>{label}{!loadingTypes && !types.some((item) => item.role === value) ? ' — not accepting requests' : ''}</option>)}</SelectField></Field></div>
-    <Field label="Organization type"><SelectField value={form.organizationTypeId} onChange={(e) => change('organizationTypeId', e.target.value)} aria-label="Organization type" disabled={loadingTypes || !types.some((item) => item.role === form.role)} required><option value="">{loadingTypes ? 'Loading options…' : 'Choose an organization type'}</option>{types.filter((item) => item.role === form.role).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</SelectField></Field>
-    <Field label="Organization"><input value={form.organizationName} onChange={(e) => change('organizationName', e.target.value)} required /></Field>
-    <Field label="Email" hint="Bloom will send account setup and recovery links here."><input type="email" autoComplete="email" value={form.contact} onChange={(e) => change('contact', e.target.value)} required /></Field>
-    <Field label="Note (optional)"><textarea rows={3} value={form.note} onChange={(e) => change('note', e.target.value)} placeholder="Anything the district team should know" /></Field>
-    <button className="button button--primary button--wide" disabled={busy || loadingTypes || !form.organizationTypeId}>{busy && <i className="button-spinner" />}{busy ? 'Sending request' : 'Request access'}<ArrowRight size={17} /></button>
+    <div className="field-grid"><Field label="Contact person"><input value={form.applicantName} onChange={(e) => change('applicantName', e.target.value)} required /></Field><Field label="Participant role"><SelectField value={form.role} onChange={(e) => { changeRole(e.target.value as PublicAccountRole); setFiles({}); }} aria-label="Participant role">{([['FOOD_WASTE_PRODUCER', 'Food Waste Producer'], ['FOOD_COLLECTOR', 'Food Collector']] as const).map(([value, label]) => <option key={value} value={value}>{label}{!loadingTypes && !types.some((item) => item.role === value) ? ' — applications unavailable' : ''}</option>)}</SelectField></Field></div>
+    <Field label="Organization category"><SelectField value={form.organizationTypeId} onChange={(e) => { change('organizationTypeId', e.target.value); setFiles({}); }} aria-label="Organization category" disabled={loadingTypes || !types.some((item) => item.role === form.role)} required><option value="">{loadingTypes ? 'Loading categories…' : types.some((item) => item.role === form.role) ? 'Choose a category' : 'No categories are accepting applications'}</option>{types.filter((item) => item.role === form.role).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</SelectField></Field>
+    <Field label="Organization name"><input value={form.organizationName} onChange={(e) => change('organizationName', e.target.value)} required /></Field>
+    <Field label="Full address"><textarea rows={3} value={form.address} onChange={(e) => change('address', e.target.value)} minLength={8} maxLength={300} required /></Field>
+    <div className="field-grid"><Field label="Email" hint="Account setup and recovery always use this address."><input type="email" autoComplete="email" value={form.email} onChange={(e) => change('email', e.target.value)} required /></Field><Field label="WhatsApp number" hint="Use international format, for example +919876543210."><input type="tel" autoComplete="tel" pattern="\+[1-9][0-9]{7,14}" value={form.whatsapp} onChange={(e) => change('whatsapp', e.target.value)} required /></Field></div>
+    <Field label="Preferred review contact"><SelectField value={form.preferredContactMethod} onChange={(e) => change('preferredContactMethod', e.target.value)}><option value="EMAIL">Email</option><option value="WHATSAPP">WhatsApp</option></SelectField></Field>
+    {form.role === 'FOOD_WASTE_PRODUCER' ? <Field label="Approximate food waste per week (kg)"><input type="number" min="0.1" step="0.1" value={form.weeklyWasteKg} onChange={(e) => change('weeklyWasteKg', e.target.value)} required /></Field> : <><Field label="Collection or transport facilities available?"><SelectField value={form.hasTransportFacilities} onChange={(e) => change('hasTransportFacilities', e.target.value)} required><option value="">Choose one</option><option value="yes">Yes</option><option value="no">No</option></SelectField></Field>{form.hasTransportFacilities === 'yes' && <Field label="Describe the facilities"><textarea rows={3} value={form.transportFacilities} onChange={(e) => change('transportFacilities', e.target.value)} maxLength={500} required /></Field>}</>}
+    {selectedType?.documentRequirements.length ? <fieldset className="verification-documents"><legend>Verification documents</legend><p>PDF, JPEG, or PNG · maximum 10 MB each</p>{selectedType.documentRequirements.map((requirement) => <Field key={requirement.id} label={requirement.label} hint={requirement.required ? 'Required' : 'Optional'}><input type="file" accept="application/pdf,image/jpeg,image/png" required={requirement.required} onChange={(event) => { const file = event.target.files?.[0]; if (file) setFiles((current) => ({ ...current, [requirement.id]: file })); }} /></Field>)}</fieldset> : selectedType ? <Notice tone="success">This category has no document uploads configured.</Notice> : null}
+    <button className="button button--primary button--wide" disabled={busy || loadingTypes || !form.organizationTypeId}>{busy && <i className="button-spinner" />}{busy ? 'Sending application' : 'Request access'}<ArrowRight size={17} /></button>
   </form>;
 }
 

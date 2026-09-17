@@ -3,7 +3,9 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import sharp from 'sharp';
 
-type MediaType = 'image/jpeg' | 'image/png' | 'image/webp';
+type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp';
+type MediaType = ImageMediaType | 'application/pdf';
+export type DocumentMediaType = 'application/pdf' | 'image/jpeg' | 'image/png';
 
 const driver = process.env.ATTACHMENT_DRIVER || (process.env.NODE_ENV === 'production' ? 'r2' : 'file');
 const localRoot = resolve(process.cwd(), process.env.ATTACHMENT_PATH || 'data/attachments');
@@ -67,19 +69,29 @@ export async function deleteAttachment(key: string) {
   await unlink(path).catch(() => undefined);
 }
 
-export function validateImage(content: Buffer, declared: string): MediaType {
+export function validateImage(content: Buffer, declared: string): ImageMediaType {
   if (content.length > 5 * 1024 * 1024) throw new Error('Each image must be 5 MB or smaller.');
   const jpeg = content.length >= 3 && content[0] === 0xff && content[1] === 0xd8 && content[2] === 0xff;
   const png = content.length >= 8 && content.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
   const webp = content.length >= 12 && content.subarray(0, 4).toString() === 'RIFF' && content.subarray(8, 12).toString() === 'WEBP';
-  const actual: MediaType | undefined = jpeg ? 'image/jpeg' : png ? 'image/png' : webp ? 'image/webp' : undefined;
+  const actual: ImageMediaType | undefined = jpeg ? 'image/jpeg' : png ? 'image/png' : webp ? 'image/webp' : undefined;
   if (!actual || actual !== declared) throw new Error('The image contents do not match its declared JPEG, PNG, or WebP type.');
+  return actual;
+}
+
+export function validateDocument(content: Buffer, declared: string): DocumentMediaType {
+  if (content.length > 10 * 1024 * 1024) throw new Error('Each document must be 10 MB or smaller.');
+  const jpeg = content.length >= 3 && content[0] === 0xff && content[1] === 0xd8 && content[2] === 0xff;
+  const png = content.length >= 8 && content.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  const pdf = content.length >= 5 && content.subarray(0, 5).toString() === '%PDF-';
+  const actual: DocumentMediaType | undefined = pdf ? 'application/pdf' : jpeg ? 'image/jpeg' : png ? 'image/png' : undefined;
+  if (!actual || actual !== declared) throw new Error('The document contents do not match the declared PDF, JPEG, or PNG type.');
   return actual;
 }
 
 export interface SanitizedImage {
   content: Buffer;
-  mediaType: MediaType;
+  mediaType: ImageMediaType;
   width: number;
   height: number;
 }

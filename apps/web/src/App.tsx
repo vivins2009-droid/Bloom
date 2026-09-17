@@ -19,6 +19,6 @@ export function App() {
   if (!account) return <AuthPage onAuthenticated={setAccount} />;
   if (account.firstLogin) return <ChangePassphrase account={account} onChanged={setAccount} />;
   if (account.role === 'ADMIN') return <AdminPortal account={account} onLogout={logout} />;
-  if (account.role === 'FOOD_PROVIDER') return <BrowserRouter><ProviderShell account={account} onAccountChanged={setAccount} onLogout={logout} /></BrowserRouter>;
+  if (account.role === 'FOOD_WASTE_PRODUCER') return <BrowserRouter><ProviderShell account={account} onAccountChanged={setAccount} onLogout={logout} /></BrowserRouter>;
   return <BrowserRouter><RecoveryPortal account={account} onAccountChanged={setAccount} onLogout={logout} /></BrowserRouter>;
 }

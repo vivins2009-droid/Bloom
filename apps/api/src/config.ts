@@ -12,7 +12,7 @@ export function validateRuntimeConfig() {
     CHAT_ENABLED: z.enum(['true', 'false']),
     EMAIL_ENABLED: z.enum(['true', 'false'])
   });
-  const chatSchema = z.object({
+  const storageSchema = z.object({
     ATTACHMENT_DRIVER: z.literal('r2'),
     ATTACHMENT_SIGNING_SECRET: z.string().min(32),
     R2_ACCOUNT_ID: z.string().min(1),
@@ -25,11 +25,11 @@ export function validateRuntimeConfig() {
     EMAIL_FROM: z.string().min(3)
   });
   const core = coreSchema.safeParse(process.env);
-  const chat = process.env.CHAT_ENABLED === 'true' ? chatSchema.safeParse(process.env) : undefined;
+  const storage = storageSchema.safeParse(process.env);
   const email = process.env.EMAIL_ENABLED === 'true' ? emailSchema.safeParse(process.env) : undefined;
   const issues = [
     ...(core.success ? [] : core.error.issues),
-    ...(chat && !chat.success ? chat.error.issues : []),
+    ...(storage.success ? [] : storage.error.issues),
     ...(email && !email.success ? email.error.issues : [])
   ];
   if (issues.length) {

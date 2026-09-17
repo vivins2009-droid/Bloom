@@ -9,7 +9,7 @@ export interface StoredSession { tokenHash: string; accountId: string; csrfHash:
 export interface AccountToken { id: string; accountId: string; purpose: 'SETUP' | 'RESET' | 'VERIFY_EMAIL'; tokenHash: string; expiresAt: string; usedAt?: string; createdAt: string }
 export interface EmailJob { id: string; to: string; subject: string; text: string; attempts: number; nextAttemptAt: string; createdAt: string; conversationId?: string; processingAt?: string; providerMessageId?: string; sentAt?: string; lastError?: string }
 export interface Database {
-  schemaVersion: 4;
+  schemaVersion: 5;
   accounts: StoredAccount[];
   accessRequests: AccessRequest[];
   organizationNameRequests: OrganizationNameChangeRequest[];
@@ -50,34 +50,33 @@ export const verifyPassphrase = (passphrase: string, stored: string) => {
 const stamp = new Date().toISOString();
 const today = stamp.slice(0, 10);
 const typeSeeds: Array<[string, PublicAccountRole, string, number]> = [
-  ['type-public-school', 'FOOD_PROVIDER', 'Public school', 0],
-  ['type-private-school', 'FOOD_PROVIDER', 'Private school', 1],
-  ['type-college', 'FOOD_PROVIDER', 'College / University', 2],
-  ['type-small-restaurant', 'FOOD_PROVIDER', 'Small restaurant', 3],
-  ['type-large-restaurant', 'FOOD_PROVIDER', 'Large restaurant', 4],
-  ['type-community-kitchen', 'FOOD_PROVIDER', 'Community kitchen', 5],
-  ['type-farmer', 'FARMER_COLLECTOR', 'Farmer / Livestock owner', 0],
-  ['type-independent-collector', 'FARMER_COLLECTOR', 'Independent collector', 1],
-  ['type-ngo-recovery', 'FARMER_COLLECTOR', 'NGO recovery service', 2],
-  ['type-municipal-collector', 'FARMER_COLLECTOR', 'Municipal collector', 3],
-  ['type-community-composter', 'COMPOSTER', 'Community composter', 0],
-  ['type-commercial-compost', 'COMPOSTER', 'Commercial compost facility', 1],
-  ['type-vermicompost', 'COMPOSTER', 'Vermicompost facility', 2]
+  ['type-public-school', 'FOOD_WASTE_PRODUCER', 'Public school', 0],
+  ['type-private-school', 'FOOD_WASTE_PRODUCER', 'Private school', 1],
+  ['type-college', 'FOOD_WASTE_PRODUCER', 'College / University', 2],
+  ['type-small-restaurant', 'FOOD_WASTE_PRODUCER', 'Small restaurant', 3],
+  ['type-large-restaurant', 'FOOD_WASTE_PRODUCER', 'Large restaurant', 4],
+  ['type-community-kitchen', 'FOOD_WASTE_PRODUCER', 'Community kitchen', 5],
+  ['type-farmer', 'FOOD_COLLECTOR', 'Farmer / Livestock owner', 0],
+  ['type-independent-collector', 'FOOD_COLLECTOR', 'Independent collector', 1],
+  ['type-ngo-recovery', 'FOOD_COLLECTOR', 'NGO recovery service', 2],
+  ['type-municipal-collector', 'FOOD_COLLECTOR', 'Municipal collector', 3],
+  ['type-community-composter', 'FOOD_COLLECTOR', 'Community composter', 4],
+  ['type-commercial-compost', 'FOOD_COLLECTOR', 'Commercial compost facility', 5],
+  ['type-vermicompost', 'FOOD_COLLECTOR', 'Vermicompost facility', 6]
 ];
+const builtInTypeIds = new Set(typeSeeds.map(([id]) => id));
 
-export const seededOrganizationTypes = (): OrganizationType[] => typeSeeds.map(([id, role, name, sortOrder]) => ({ id, role, name, sortOrder, active: true, createdAt: stamp, updatedAt: stamp }));
+export const seededOrganizationTypes = (): OrganizationType[] => typeSeeds.map(([id, role, name, sortOrder]) => ({ id, role, name, sortOrder, active: false, documentRequirements: [], createdAt: stamp, updatedAt: stamp }));
 
 const seedDatabase = (): Database => {
-  const providerId = 'acct-school-demo';
+  const providerId = 'acct-producer-demo';
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     accounts: [
-      { id: providerId, role: 'FOOD_PROVIDER', accessCode: 'SCH-DEMO', passphraseHash: hashPassphrase('bloom-school'), displayName: 'Ananya Rao', organizationName: 'Coimbatore Government School', contact: 'ananya@example.org', organizationTypeId: 'type-public-school', status: 'ACTIVE', firstLogin: false, locality: 'Coimbatore', collectionAddress: '12 School Road, Coimbatore, Tamil Nadu 641001', collectionInstructions: 'Use the kitchen service entrance and ask for the food service lead.', createdAt: stamp },
-      { id: 'acct-admin', role: 'ADMIN', accessCode: 'ADMIN-BLOOM', passphraseHash: hashPassphrase('bloom-admin'), displayName: 'District Administrator', organizationName: 'Coimbatore Food Recovery Office', contact: 'admin@example.org', status: 'ACTIVE', firstLogin: false, createdAt: stamp }
+      { id: providerId, role: 'FOOD_WASTE_PRODUCER', accessCode: 'FWP-DEMO', passphraseHash: hashPassphrase('bloom-producer'), displayName: 'Ananya Rao', organizationName: 'Green Table Foods', contact: 'ananya@example.org', email: 'ananya@example.org', phone: '+919876543210', organizationTypeId: 'type-community-kitchen', status: 'ACTIVE', firstLogin: false, locality: 'Coimbatore', collectionAddress: '12 Service Road, Coimbatore, Tamil Nadu 641001', collectionInstructions: 'Use the service entrance and ask for the food operations lead.', createdAt: stamp },
+      { id: 'acct-admin', role: 'ADMIN', accessCode: 'ADMIN-BLOOM', passphraseHash: hashPassphrase('bloom-admin'), displayName: 'Bloom Administrator', organizationName: 'Bloom Operations', contact: 'admin@example.org', email: 'admin@example.org', status: 'ACTIVE', firstLogin: false, createdAt: stamp }
     ],
-    accessRequests: [
-      { id: 'request-demo', applicantName: 'Maya Krishnan', role: 'FOOD_PROVIDER', organizationTypeId: 'type-public-school', organizationTypeName: 'Public school', organizationName: 'Pudur Municipal School', contact: 'maya@example.org', note: 'We serve 240 lunches each weekday.', status: 'PENDING', createdAt: stamp }
-    ],
+    accessRequests: [],
     organizationNameRequests: [],
     organizationTypes: seededOrganizationTypes(),
     auditEvents: [],
@@ -99,29 +98,33 @@ const seedDatabase = (): Database => {
   };
 };
 
-const ensureLocalRecoveryDemos = (database: Database) => {
-  const localDemos: Array<Pick<StoredAccount, 'id' | 'role' | 'accessCode' | 'displayName' | 'organizationName' | 'contact' | 'organizationTypeId'>> = [
-    { id: 'acct-farmer-demo', role: 'FARMER_COLLECTOR', accessCode: 'FCL-DEMO', displayName: 'Karthik Mani', organizationName: 'Coimbatore Recovery Collective', contact: 'collector@example.org', organizationTypeId: 'type-independent-collector' },
-    { id: 'acct-composter-demo', role: 'COMPOSTER', accessCode: 'CMP-DEMO', displayName: 'Meera Das', organizationName: 'Noyyal Community Compost', contact: 'compost@example.org', organizationTypeId: 'type-community-composter' }
+const ensureLocalDemoAccounts = (database: Database) => {
+  const localDemos: Array<Pick<StoredAccount, 'id' | 'role' | 'accessCode' | 'displayName' | 'organizationName' | 'contact' | 'email' | 'phone' | 'organizationTypeId' | 'locality' | 'collectionAddress' | 'collectionInstructions'> & { passphrase: string }> = [
+    { id: 'acct-producer-demo', role: 'FOOD_WASTE_PRODUCER', accessCode: 'FWP-DEMO', passphrase: 'bloom-producer', displayName: 'Ananya Rao', organizationName: 'Green Table Foods', contact: 'ananya@example.org', email: 'ananya@example.org', phone: '+919876543210', organizationTypeId: 'type-community-kitchen', locality: 'Coimbatore', collectionAddress: '12 Service Road, Coimbatore, Tamil Nadu 641001', collectionInstructions: 'Use the service entrance and ask for the food operations lead.' },
+    { id: 'acct-collector-demo', role: 'FOOD_COLLECTOR', accessCode: 'FCL-DEMO', passphrase: 'bloom-recovery', displayName: 'Karthik Mani', organizationName: 'Coimbatore Recovery Collective', contact: 'collector@example.org', email: 'collector@example.org', organizationTypeId: 'type-independent-collector' }
   ];
-  for (const demo of localDemos) if (!database.accounts.some((account) => account.id === demo.id || account.accessCode === demo.accessCode)) database.accounts.push({ ...demo, passphraseHash: hashPassphrase('bloom-recovery'), status: 'ACTIVE', firstLogin: false, createdAt: stamp });
+  for (const { passphrase, ...demo } of localDemos) if (!database.accounts.some((account) => account.id === demo.id || account.accessCode === demo.accessCode)) database.accounts.push({ ...demo, passphraseHash: hashPassphrase(passphrase), status: 'ACTIVE', firstLogin: false, createdAt: stamp });
 };
 
 export function normalizeDatabase(input: any): Database {
   const raw = input ?? {};
   const organizationTypes: OrganizationType[] = Array.isArray(raw.organizationTypes) && raw.organizationTypes.length
-    ? raw.organizationTypes.map((item: any) => ({ ...item, role: item.role === 'SCHOOL' ? 'FOOD_PROVIDER' : item.role }))
+    ? raw.organizationTypes.map((item: any) => ({
+        ...item,
+        role: migratePublicRole(item.role),
+        active: raw.schemaVersion >= 5 ? Boolean(item.active) : builtInTypeIds.has(item.id) ? false : Boolean(item.active),
+        documentRequirements: Array.isArray(item.documentRequirements) ? item.documentRequirements : []
+      }))
     : seededOrganizationTypes();
-  const migrateRole = (role: string) => role === 'SCHOOL' ? 'FOOD_PROVIDER' : role;
-  const defaultType = (role: PublicAccountRole) => role === 'FOOD_PROVIDER' ? 'type-public-school' : role === 'FARMER_COLLECTOR' ? 'type-independent-collector' : 'type-community-composter';
+  const defaultType = (role: PublicAccountRole) => role === 'FOOD_WASTE_PRODUCER' ? 'type-community-kitchen' : 'type-independent-collector';
   const typeName = (id: string) => organizationTypes.find((type) => type.id === id)?.name ?? 'Organization';
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     organizationTypes,
     auditEvents: Array.isArray(raw.auditEvents) ? raw.auditEvents : [],
     organizationNameRequests: Array.isArray(raw.organizationNameRequests) ? raw.organizationNameRequests : [],
     accounts: (raw.accounts ?? []).map((account: any) => {
-      const role = migrateRole(account.role) as Account['role'];
+      const role = account.role === 'ADMIN' ? 'ADMIN' : migratePublicRole(account.role);
       return {
         ...account,
         role,
@@ -131,15 +134,29 @@ export function normalizeDatabase(input: any): Database {
         contactNeedsReview: account.contactNeedsReview ?? (!String(account.contact ?? '').includes('@')),
         status: account.status ?? 'ACTIVE',
         organizationTypeId: role === 'ADMIN' ? undefined : account.organizationTypeId ?? defaultType(role as PublicAccountRole),
-        locality: role === 'FOOD_PROVIDER' ? account.locality ?? '' : undefined,
-        collectionAddress: role === 'FOOD_PROVIDER' ? account.collectionAddress ?? '' : undefined,
-        collectionInstructions: role === 'FOOD_PROVIDER' ? account.collectionInstructions ?? '' : undefined
+        locality: role === 'FOOD_WASTE_PRODUCER' ? account.locality ?? '' : undefined,
+        collectionAddress: role === 'FOOD_WASTE_PRODUCER' ? account.collectionAddress ?? '' : undefined,
+        collectionInstructions: role === 'FOOD_WASTE_PRODUCER' ? account.collectionInstructions ?? '' : undefined
       };
     }),
     accessRequests: (raw.accessRequests ?? []).map((request: any) => {
-      const role = migrateRole(request.role) as PublicAccountRole;
+      const role = migratePublicRole(request.role);
       const organizationTypeId = request.organizationTypeId ?? defaultType(role);
-      return { ...request, role, organizationTypeId, organizationTypeName: request.organizationTypeName ?? typeName(organizationTypeId), email: request.email ?? (String(request.contact ?? '').includes('@') ? request.contact : undefined) };
+      const email = request.email ?? (String(request.contact ?? '').includes('@') ? request.contact : 'legacy@example.invalid');
+      return {
+        ...request,
+        role,
+        organizationTypeId,
+        organizationTypeName: request.organizationTypeName ?? typeName(organizationTypeId),
+        address: request.address ?? '',
+        contact: email,
+        email,
+        whatsapp: request.whatsapp ?? request.phone ?? '',
+        preferredContactMethod: request.preferredContactMethod ?? 'EMAIL',
+        requiredDocuments: Array.isArray(request.requiredDocuments) ? request.requiredDocuments : [],
+        documents: Array.isArray(request.documents) ? request.documents : [],
+        submittedAt: request.submittedAt ?? (request.status === 'DRAFT' ? undefined : request.createdAt)
+      };
     }),
     meals: (raw.meals ?? []).map(({ schoolId, ...meal }: any) => ({ ...meal, providerId: meal.providerId ?? schoolId })),
     assignments: (raw.assignments ?? []).map(({ schoolId, ...assignment }: any) => ({ ...assignment, providerId: assignment.providerId ?? schoolId })),
@@ -151,7 +168,7 @@ export function normalizeDatabase(input: any): Database {
         ...pickup,
         providerId,
         providerName: pickup.providerName ?? provider?.organizationName ?? 'Food Provider',
-        eligibleRoles: pickup.eligibleRoles?.length ? pickup.eligibleRoles : ['FARMER_COLLECTOR', 'COMPOSTER'],
+        eligibleRoles: ['FOOD_COLLECTOR'],
         status: pickup.status === 'AWAITING_SCHOOL_CONFIRMATION' ? 'AWAITING_PROVIDER_CONFIRMATION' : pickup.status,
         availableFrom: pickup.availableFrom ?? pickup.createdAt,
         pickupDeadline: pickup.pickupDeadline ?? expiresAt ?? new Date(new Date(pickup.createdAt).getTime() + 12 * 60 * 60 * 1000).toISOString(),
@@ -169,6 +186,12 @@ export function normalizeDatabase(input: any): Database {
     chatAttachments: Array.isArray(raw.chatAttachments) ? raw.chatAttachments : [],
     emailJobs: Array.isArray(raw.emailJobs) ? raw.emailJobs : []
   };
+}
+
+function migratePublicRole(role: string): PublicAccountRole {
+  return role === 'FARMER_COLLECTOR' || role === 'COMPOSTER' || role === 'FOOD_COLLECTOR'
+    ? 'FOOD_COLLECTOR'
+    : 'FOOD_WASTE_PRODUCER';
 }
 
 export class FileRepository implements Repository {
@@ -191,8 +214,8 @@ export class FileRepository implements Repository {
     await this.ensure();
     const raw = JSON.parse(await readFile(this.filePath, 'utf8'));
     const database = normalizeDatabase(raw);
-    ensureLocalRecoveryDemos(database);
-    if (raw.schemaVersion !== 4 || database.accounts.length !== (raw.accounts ?? []).length) await this.write(database);
+    ensureLocalDemoAccounts(database);
+    if (raw.schemaVersion !== 5 || database.accounts.length !== (raw.accounts ?? []).length) await this.write(database);
     return database;
   }
 
@@ -226,7 +249,7 @@ export class PostgresRepository implements Repository {
   }
 
   private async readClient(client: PoolClient): Promise<Database> {
-    const state = normalizeDatabase({ schemaVersion: 4, organizationTypes: [] });
+    const state = normalizeDatabase({ schemaVersion: 5, organizationTypes: [] });
     for (const [key, table] of Object.entries(this.tables) as Array<[keyof typeof this.tables, string]>) {
       const result = await client.query<{ document: unknown }>(`SELECT document FROM ${table} ORDER BY id`);
       (state[key] as unknown[]) = result.rows.map((row) => row.document);
@@ -239,7 +262,7 @@ export class PostgresRepository implements Repository {
       await client.query(`DELETE FROM ${table}`);
       for (const entity of state[key] as unknown as any[]) await client.query(`INSERT INTO ${table} (id, document) VALUES ($1, $2::jsonb)`, [this.entityId(key, entity), JSON.stringify(entity)]);
     }
-    await client.query(`INSERT INTO bloom_meta (key, value) VALUES ('schema_version', '4') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+    await client.query(`INSERT INTO bloom_meta (key, value) VALUES ('schema_version', '5') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
   }
 
   private verifyMigration(state: Database, expected?: Database) {
@@ -283,6 +306,10 @@ export class PostgresRepository implements Repository {
         } else source = normalizeDatabase({ organizationTypes: seededOrganizationTypes() });
         await this.replaceAll(client, source);
         this.verifyMigration(await this.readClient(client), source);
+      } else if (version.rows[0]?.value !== '5') {
+        const source = await this.readClient(client);
+        await this.replaceAll(client, source);
+        this.verifyMigration(await this.readClient(client), source);
       }
       await client.query('COMMIT');
     } catch (error) { await client.query('ROLLBACK'); throw error; }
@@ -324,7 +351,7 @@ export async function createRepository(): Promise<Repository> {
 }
 
 export const createAccessCode = (role: PublicAccountRole, accounts: StoredAccount[]) => {
-  const prefix = role === 'FOOD_PROVIDER' ? 'FPR' : role === 'COMPOSTER' ? 'CMP' : 'FCL';
+  const prefix = role === 'FOOD_WASTE_PRODUCER' ? 'FWP' : 'FCL';
   let code = '';
   do { code = `${prefix}-${randomBytes(3).toString('hex').toUpperCase()}`; }
   while (accounts.some((account) => account.accessCode === code));

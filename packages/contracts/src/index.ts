@@ -1,8 +1,9 @@
-export type AccountRole = 'FOOD_PROVIDER' | 'FARMER_COLLECTOR' | 'COMPOSTER' | 'ADMIN';
+export type AccountRole = 'FOOD_WASTE_PRODUCER' | 'FOOD_COLLECTOR' | 'ADMIN';
 export type PublicAccountRole = Exclude<AccountRole, 'ADMIN'>;
-export type RecoveryRole = Extract<AccountRole, 'FARMER_COLLECTOR' | 'COMPOSTER'>;
+export type RecoveryRole = Extract<AccountRole, 'FOOD_COLLECTOR'>;
 export type AccountStatus = 'ACTIVE' | 'SUSPENDED';
-export type AccessRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type AccessRequestStatus = 'DRAFT' | 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
+export type ContactPreference = 'EMAIL' | 'WHATSAPP';
 export type OrganizationNameRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type PickupStatus = 'AVAILABLE' | 'RESERVED' | 'IN_TRANSIT' | 'AWAITING_PROVIDER_CONFIRMATION' | 'COLLECTED' | 'CANCELLED' | 'EXPIRED';
 export type WasteReason = 'LOW_ATTENDANCE' | 'MENU_PREFERENCE' | 'OVERPRODUCTION' | 'PREPARATION_WASTE' | 'OTHER';
@@ -13,8 +14,28 @@ export interface OrganizationType {
   name: string;
   active: boolean;
   sortOrder: number;
+  documentRequirements: VerificationDocumentRequirement[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface VerificationDocumentRequirement {
+  id: string;
+  label: string;
+  required: boolean;
+  sortOrder: number;
+}
+
+export interface AccessRequestDocument {
+  id: string;
+  requestId: string;
+  requirementId: string;
+  requirementLabel: string;
+  fileName: string;
+  objectKey: string;
+  mediaType: 'application/pdf' | 'image/jpeg' | 'image/png';
+  byteSize: number;
+  createdAt: string;
 }
 
 export interface Account {
@@ -29,6 +50,10 @@ export interface Account {
   phone?: string;
   contactNeedsReview?: boolean;
   organizationTypeId?: string;
+  address?: string;
+  weeklyWasteKg?: number;
+  hasTransportFacilities?: boolean;
+  transportFacilities?: string;
   status: AccountStatus;
   firstLogin: boolean;
   locality?: string;
@@ -44,11 +69,22 @@ export interface AccessRequest {
   organizationTypeId: string;
   organizationTypeName: string;
   organizationName: string;
+  address: string;
   contact: string;
-  email?: string;
-  note: string;
+  email: string;
+  whatsapp: string;
+  preferredContactMethod: ContactPreference;
+  weeklyWasteKg?: number;
+  hasTransportFacilities?: boolean;
+  transportFacilities?: string;
+  requiredDocuments: VerificationDocumentRequirement[];
+  documents: AccessRequestDocument[];
   status: AccessRequestStatus;
   createdAt: string;
+  submittedAt?: string;
+  reviewStartedAt?: string;
+  contactedAt?: string;
+  contactChannel?: ContactPreference;
   reviewedAt?: string;
   rejectionReason?: string;
   reviewedBy?: string;
@@ -161,7 +197,7 @@ export interface InsightSummary {
 }
 
 export type AdminAuditAction =
-  | 'REQUEST_APPROVED' | 'REQUEST_REJECTED'
+  | 'REQUEST_REVIEW_STARTED' | 'REQUEST_CONTACTED' | 'REQUEST_APPROVED' | 'REQUEST_REJECTED'
   | 'ACCOUNT_CREATED' | 'ACCOUNT_TYPE_CHANGED' | 'ACCOUNT_SUSPENDED' | 'ACCOUNT_REACTIVATED' | 'ACCOUNT_PASSPHRASE_RESET'
   | 'ORGANIZATION_TYPE_CREATED' | 'ORGANIZATION_TYPE_UPDATED' | 'ORGANIZATION_TYPE_ARCHIVED' | 'ORGANIZATION_TYPE_DELETED'
   | 'PICKUP_CANCELLED' | 'PICKUP_EXPIRED' | 'PICKUP_REOPENED'
