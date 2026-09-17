@@ -1,6 +1,10 @@
 import type { ApiError } from '@bloom/contracts';
 
-const apiOrigin = (((import.meta as unknown as { env: Record<string, string | undefined> }).env.VITE_API_URL) ?? '').replace(/\/$/, '');
+const configuredApiOrigin = (((import.meta as unknown as { env: Record<string, string | undefined> }).env.VITE_API_URL) ?? '').replace(/\/$/, '');
+// Production HTTP requests use Vercel's same-origin proxy. This keeps account
+// setup and sign-in available while the API remains on Railway and avoids
+// coupling browser access to Railway's deployment-specific CORS snapshot.
+const apiOrigin = window.location.hostname === 'bloom-co.in' ? '' : configuredApiOrigin;
 let csrfToken = '';
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -25,7 +29,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const apiBaseUrl = apiOrigin;
-export const chatSocketUrl = `${apiOrigin || window.location.origin}`.replace(/^http/, 'ws') + '/api/chat/socket';
+export const chatSocketUrl = `${configuredApiOrigin || window.location.origin}`.replace(/^http/, 'ws') + '/api/chat/socket';
 
 export const today = () => new Date().toISOString().slice(0, 10);
 export const formatDate = (value: string, options?: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-IN', options ?? { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${value}T00:00:00`));
