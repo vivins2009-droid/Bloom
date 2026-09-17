@@ -82,7 +82,9 @@ describe('production readiness', () => {
     let state = normalizeDatabase({ organizationTypes: [] });
     const repository: Repository = {
       read: async () => state,
-      mutate: async (work) => { const value = work(state); state = normalizeDatabase(state); return value; }
+      mutate: async (work) => { const value = work(state); state = normalizeDatabase(state); return value; },
+      findSessionAccount: async () => null,
+      refreshSession: async () => undefined
     };
     process.env.NODE_ENV = 'production';
     process.env.EMAIL_ENABLED = 'true';

@@ -75,14 +75,14 @@ const publicAccount = (account: any): Account => {
 const authenticate = asyncRoute(async (req, res, next) => {
   const token = req.cookies.bloom_session;
   const hash = token ? tokenHash(token) : '';
-  const db = await repository.read();
-  const session = db.sessions.find((item) => item.tokenHash === hash && !item.revokedAt);
+  const authentication = hash ? await repository.findSessionAccount(hash) : null;
+  const session = authentication?.session && !authentication.session.revokedAt ? authentication.session : undefined;
   if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
     if (session) await repository.mutate((state) => { const current = state.sessions.find((item) => item.tokenHash === hash); if (current) current.revokedAt = new Date().toISOString(); });
     res.status(401).json({ error: { code: 'UNAUTHENTICATED', message: 'Sign in to continue.' } });
     return;
   }
-  const account = db.accounts.find((item) => item.id === session.accountId);
+  const account = authentication?.account;
   if (!account || account.status === 'SUSPENDED') {
     await repository.mutate((state) => { const current = state.sessions.find((item) => item.tokenHash === hash); if (current) current.revokedAt = new Date().toISOString(); });
     res.status(401).json({ error: { code: 'SESSION_INVALID', message: 'Your session is no longer valid. Sign in again.' } });
@@ -282,7 +282,7 @@ app.post('/api/auth/complete-account-link', rateLimit('account-link', 12, 15 * 6
 
 app.get('/api/auth/me', authenticate, asyncRoute(async (req, res) => {
   const csrf = makeToken();
-  await repository.mutate((state) => { const session = state.sessions.find((item) => item.tokenHash === req.sessionTokenHash); if (session) { session.csrfHash = tokenHash(csrf); session.lastActivityAt = new Date().toISOString(); } });
+  await repository.refreshSession(req.sessionTokenHash!, tokenHash(csrf), new Date().toISOString());
   res.setHeader('x-csrf-token', csrf); res.json(req.account);
 }));
 app.post('/api/auth/logout', authenticate, asyncRoute(async (req, res) => {

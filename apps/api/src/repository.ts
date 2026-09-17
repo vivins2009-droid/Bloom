@@ -31,6 +31,8 @@ export interface Database {
 export interface Repository {
   read(): Promise<Database>;
   mutate<T>(work: (database: Database) => T): Promise<T>;
+  findSessionAccount(tokenHash: string): Promise<{ session: StoredSession; account: StoredAccount } | null>;
+  refreshSession(tokenHash: string, csrfHash: string, lastActivityAt: string): Promise<void>;
 }
 
 type EntityCollectionKey = Exclude<keyof Database, 'schemaVersion'>;
@@ -231,6 +233,20 @@ export class FileRepository implements Repository {
     await this.queue;
     return result;
   }
+
+  async findSessionAccount(tokenHash: string) {
+    const database = await this.read();
+    const session = database.sessions.find((item) => item.tokenHash === tokenHash);
+    const account = session && database.accounts.find((item) => item.id === session.accountId);
+    return session && account ? { session, account } : null;
+  }
+
+  async refreshSession(tokenHash: string, csrfHash: string, lastActivityAt: string) {
+    await this.mutate((database) => {
+      const session = database.sessions.find((item) => item.tokenHash === tokenHash);
+      if (session) Object.assign(session, { csrfHash, lastActivityAt });
+    });
+  }
 }
 
 export class PostgresRepository implements Repository {
@@ -347,6 +363,25 @@ export class PostgresRepository implements Repository {
       return value;
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }
+  }
+
+  async findSessionAccount(tokenHash: string) {
+    const result = await this.pool.query<{ session: StoredSession; account: StoredAccount }>(
+      `SELECT session.document AS session, account.document AS account
+       FROM sessions AS session
+       JOIN accounts AS account ON account.id = session.document->>'accountId'
+       WHERE session.id = $1
+       LIMIT 1`,
+      [tokenHash]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async refreshSession(tokenHash: string, csrfHash: string, lastActivityAt: string) {
+    await this.pool.query(
+      `UPDATE sessions SET document = document || $2::jsonb WHERE id = $1`,
+      [tokenHash, JSON.stringify({ csrfHash, lastActivityAt })]
+    );
   }
 }
 

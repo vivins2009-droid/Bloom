@@ -10,7 +10,7 @@ let csrfToken = '';
 const responseCache = new Map<string, { expiresAt: number; value: unknown }>();
 const pendingRequests = new Map<string, Promise<unknown>>();
 
-const cacheDuration = (path: string) => path === '/organization-types' ? 5 * 60_000 : 20_000;
+const cacheDuration = (path: string) => path === '/organization-types' ? 5 * 60_000 : 2 * 60_000;
 
 export function clearApiCache() {
   responseCache.clear();

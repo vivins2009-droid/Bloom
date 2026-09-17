@@ -4,7 +4,7 @@ import {
   Search, Settings, SlidersHorizontal, Trash2, UserRoundCheck, UsersRound, X
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { BrowserRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import type {
   AccessRequest, AccessRequestStatus, Account, AccountStatus, AdminAuditEvent, AdminOverview,
   OrganizationNameChangeRequest, OrganizationType, Pickup, PickupStatus, PublicAccountRole
@@ -38,9 +38,9 @@ export function AdminPortal({ account, onLogout }: { account: Account; onLogout:
 }
 
 function AdminShell({ account, onLogout }: { account: Account; onLogout: () => void }) {
-  const location = useLocation(); const navigate = useNavigate();
+  const navigate = useNavigate();
   const [overview, setOverview] = useState<AdminOverview | null>(null);
-  useEffect(() => { api<AdminOverview>('/admin/overview').then(setOverview).catch(() => setOverview(null)); }, [location.pathname]);
+  useEffect(() => { api<AdminOverview>('/admin/overview').then(setOverview).catch(() => setOverview(null)); }, []);
   const attention = (overview?.pendingRequests ?? 0) + (overview?.pendingNameChanges ?? 0) + (overview?.pickupExceptions ?? 0);
   return <AppShell account={account} workspace="Network Administration" navigation={nav} onLogout={onLogout} className="admin-layout" actions={
         <button className="attention-button" onClick={() => navigate((overview?.pendingRequests || overview?.pendingNameChanges) ? '/admin/requests' : '/admin/pickups')} aria-label={`${attention} items need attention`}><Bell size={18} />{attention > 0 && <b>{attention}</b>}</button>
