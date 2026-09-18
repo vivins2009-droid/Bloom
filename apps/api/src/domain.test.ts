@@ -4,7 +4,7 @@ import type { DailyWasteLog, Meal, Pickup } from '@bloom/contracts';
 
 const log = (date: string, prepared: number, attendance: number, leftoverKg = 5): DailyWasteLog => ({
   id: date, providerId: 's1', date, mealIds: ['m1'], actualAttendance: attendance, servingsPrepared: prepared,
-  leftoverKg, reason: 'OVERPRODUCTION', suitableForCollection: true, notes: '', createdAt: `${date}T10:00:00Z`
+  recordedAt: `${date}T10:00:00Z`, servicePeriod: 'LUNCH', wasteStage: 'OVERPRODUCTION', foodCategory: 'Rice', leftoverKg, reason: 'OVERPRODUCTION', suitableForCollection: true, notes: '', createdAt: `${date}T10:00:00Z`
 });
 
 describe('food provider domain', () => {
@@ -20,9 +20,21 @@ describe('food provider domain', () => {
 
   it('calculates insights only from recorded logs', () => {
     const meals: Meal[] = [{ id: 'm1', providerId: 's1', name: 'Tomato rice', createdAt: '2026-09-01' }];
-    const insights = calculateInsights([log('2026-09-01', 110, 100, 8)], meals, new Date('2026-09-07'));
+    const insights = calculateInsights([log('2026-09-01', 110, 100, 8)], meals, new Date('2026-09-07T12:00:00Z'));
     expect(insights.leftoverPer100Attendees).toBe(8);
     expect(insights.topMeals[0].name).toBe('Tomato rice');
+    expect(insights.sevenDay.totalKg).toBe(8);
+    expect(insights.stageBreakdown).toEqual([{ stage: 'OVERPRODUCTION', wasteKg: 8 }]);
+    expect(insights.serviceBreakdown).toEqual([{ servicePeriod: 'LUNCH', wasteKg: 8 }]);
+    expect(insights.categoryBreakdown).toEqual([{ category: 'Rice', wasteKg: 8 }]);
+  });
+
+  it('compares seven-day periods and only produces guidance from enough records', () => {
+    const logs = [log('2026-09-07', 0, 0, 4), log('2026-09-06', 0, 0, 3), log('2026-09-05', 0, 0, 3), log('2026-08-31', 0, 0, 20)];
+    const insights = calculateInsights(logs, [], new Date('2026-09-07T12:00:00Z'));
+    expect(insights.sevenDay).toMatchObject({ totalKg: 10, recordCount: 3, collectionSuitableKg: 10, changePercent: -50 });
+    expect(insights.guidance.some((item) => item.includes('overproduction'))).toBe(true);
+    expect(insights.guidance.some((item) => item.includes('down 50%'))).toBe(true);
   });
 
   it('generates biweekly dates', () => {

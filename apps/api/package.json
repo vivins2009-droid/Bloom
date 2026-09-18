@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "DATA_DRIVER=file PORT=5002 tsx watch src/server.ts",
+    "dev": "DATA_DRIVER=file PRESENTATION_MODE=true PORT=5002 tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit"

@@ -6,7 +6,9 @@ export type AccessRequestStatus = 'DRAFT' | 'PENDING' | 'UNDER_REVIEW' | 'APPROV
 export type ContactPreference = 'EMAIL' | 'WHATSAPP';
 export type OrganizationNameRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type PickupStatus = 'AVAILABLE' | 'RESERVED' | 'IN_TRANSIT' | 'AWAITING_PROVIDER_CONFIRMATION' | 'COLLECTED' | 'CANCELLED' | 'EXPIRED';
-export type WasteReason = 'LOW_ATTENDANCE' | 'MENU_PREFERENCE' | 'OVERPRODUCTION' | 'PREPARATION_WASTE' | 'OTHER';
+export type WasteReason = 'LOW_ATTENDANCE' | 'MENU_PREFERENCE' | 'OVERPRODUCTION' | 'PREPARATION_WASTE' | 'LOW_DEMAND' | 'FORECAST_VARIANCE' | 'CUSTOMER_PREFERENCE' | 'PORTION_SIZE' | 'QUALITY_ISSUE' | 'PROCESS_ERROR' | 'OTHER';
+export type ServicePeriod = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'ALL_DAY' | 'EVENT' | 'OTHER';
+export type WasteStage = 'PREPARATION' | 'STORAGE_SPOILAGE' | 'OVERPRODUCTION' | 'PLATE_RETURN' | 'OTHER';
 
 export interface OrganizationType {
   id: string;
@@ -50,6 +52,7 @@ export interface Account {
   phone?: string;
   contactNeedsReview?: boolean;
   organizationTypeId?: string;
+  organizationTypeName?: string;
   address?: string;
   weeklyWasteKg?: number;
   hasTransportFacilities?: boolean;
@@ -128,9 +131,13 @@ export interface DailyWasteLog {
   id: string;
   providerId: string;
   date: string;
-  mealIds: string[];
-  actualAttendance: number;
-  servingsPrepared: number;
+  recordedAt?: string;
+  servicePeriod?: ServicePeriod;
+  wasteStage?: WasteStage;
+  foodCategory?: string;
+  mealIds?: string[];
+  actualAttendance?: number;
+  servingsPrepared?: number;
   leftoverKg: number;
   reason: WasteReason;
   suitableForCollection: boolean;
@@ -194,6 +201,16 @@ export interface InsightSummary {
   topMeals: Array<{ mealId: string; name: string; leftoverKg: number }>;
   topReasons: Array<{ reason: WasteReason; leftoverKg: number }>;
   recommendation: string | null;
+  sevenDay: {
+    totalKg: number;
+    recordCount: number;
+    collectionSuitableKg: number;
+    changePercent: number | null;
+  };
+  stageBreakdown: Array<{ stage: WasteStage; wasteKg: number }>;
+  serviceBreakdown: Array<{ servicePeriod: ServicePeriod; wasteKg: number }>;
+  categoryBreakdown: Array<{ category: string; wasteKg: number }>;
+  guidance: string[];
 }
 
 export type AdminAuditAction =

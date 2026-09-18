@@ -55,4 +55,4 @@ export const apiBaseUrl = apiOrigin;
 export const chatSocketUrl = `${configuredApiOrigin || window.location.origin}`.replace(/^http/, 'ws') + '/api/chat/socket';
 
 export const today = () => new Date().toISOString().slice(0, 10);
-export const formatDate = (value: string, options?: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-IN', options ?? { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${value}T00:00:00`));
+export const formatDate = (value: string, options?: Intl.DateTimeFormatOptions | boolean) => new Intl.DateTimeFormat('en-IN', options === true ? { dateStyle: 'medium', timeStyle: 'short' } : options || { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value.includes('T') ? value : `${value}T00:00:00`));

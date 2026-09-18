@@ -102,6 +102,67 @@ const seedDatabase = (): Database => {
   };
 };
 
+const presentationDatabase = (): Database => {
+  const database = seedDatabase();
+  const now = Date.now();
+  const iso = (offsetDays: number, hour = 10) => {
+    const date = new Date(now + offsetDays * 86400000);
+    date.setHours(hour, 0, 0, 0);
+    return date.toISOString();
+  };
+  const date = (offsetDays: number) => iso(offsetDays).slice(0, 10);
+  const providerId = 'acct-producer-demo';
+  const collectorId = 'acct-collector-demo';
+  const secondProviderId = 'acct-provider-sunrise';
+
+  database.accounts = [
+    ...database.accounts,
+    { id: secondProviderId, role: 'FOOD_WASTE_PRODUCER', accessCode: 'FWP-SUNRISE', passphraseHash: hashPassphrase('bloom-sunrise'), displayName: 'Meera Krishnan', organizationName: 'Sunrise Public School', contact: 'meera@sunriseschool.org', email: 'meera@sunriseschool.org', phone: '+919812345678', organizationTypeId: 'type-private-school', status: 'ACTIVE', firstLogin: false, locality: 'Coimbatore', collectionAddress: '45 Lake View Road, Coimbatore, Tamil Nadu 641018', collectionInstructions: 'Use the rear kitchen gate beside the staff parking area.', createdAt: iso(-18) }
+  ];
+  database.organizationTypes = database.organizationTypes.map((type) => ({ ...type, active: ['type-private-school', 'type-college', 'type-small-restaurant', 'type-large-restaurant', 'type-community-kitchen', 'type-independent-collector', 'type-ngo-recovery', 'type-community-composter'].includes(type.id) }));
+
+  database.meals = [
+    { id: 'meal-tomato', providerId, name: 'Tomato rice with pepper egg', createdAt: iso(-30) },
+    { id: 'meal-sambar', providerId, name: 'Sambar rice and boiled egg', createdAt: iso(-30) },
+    { id: 'meal-biryani', providerId, name: 'Vegetable biryani', createdAt: iso(-24) },
+    { id: 'meal-lemon', providerId, name: 'Lemon rice and vegetable korma', createdAt: iso(-16) },
+    { id: 'meal-pulao', providerId: secondProviderId, name: 'Vegetable pulao', createdAt: iso(-16) },
+    { id: 'meal-chapati', providerId: secondProviderId, name: 'Chapati and chana masala', createdAt: iso(-12) }
+  ];
+  database.assignments = [
+    { id: 'assign-today', providerId, date: date(0), mealIds: ['meal-tomato'], recurrence: { frequency: 'NONE' }, createdAt: iso(-2) },
+    { id: 'assign-tomorrow', providerId, date: date(1), mealIds: ['meal-sambar'], recurrence: { frequency: 'NONE' }, createdAt: iso(-2) },
+    { id: 'assign-friday', providerId, date: date(3), mealIds: ['meal-biryani'], recurrence: { frequency: 'NONE' }, createdAt: iso(-2) },
+    { id: 'assign-school-today', providerId: secondProviderId, date: date(0), mealIds: ['meal-pulao'], recurrence: { frequency: 'NONE' }, createdAt: iso(-5) },
+    { id: 'assign-school-next', providerId: secondProviderId, date: date(2), mealIds: ['meal-chapati'], recurrence: { frequency: 'NONE' }, createdAt: iso(-5) }
+  ];
+  const log = (id: string, owner: string, daysAgo: number, mealIds: string[], leftoverKg: number, attendance: number, prepared: number, category: string, reason: DailyWasteLog['reason'], suitableForCollection: boolean) => ({ id, providerId: owner, date: date(-daysAgo), mealIds, actualAttendance: attendance, servingsPrepared: prepared, recordedAt: iso(-daysAgo, 14), servicePeriod: 'LUNCH' as const, wasteStage: 'OVERPRODUCTION' as const, foodCategory: category, leftoverKg, reason, suitableForCollection, notes: suitableForCollection ? 'Packed in clean, labelled containers and ready for collection.' : 'Used for staff meal and compost segregation.', createdAt: iso(-daysAgo, 14) });
+  database.logs = [
+    log('log-1', providerId, 1, ['meal-tomato'], 7.4, 182, 205, 'Rice', 'OVERPRODUCTION', true),
+    log('log-2', providerId, 3, ['meal-sambar'], 5.2, 176, 190, 'Rice', 'OVERPRODUCTION', true),
+    log('log-3', providerId, 5, ['meal-biryani'], 3.8, 168, 178, 'Mixed meal', 'OVERPRODUCTION', true),
+    log('log-4', providerId, 7, ['meal-lemon'], 6.1, 180, 195, 'Rice', 'OVERPRODUCTION', true),
+    log('log-5', providerId, 9, ['meal-tomato'], 4.5, 171, 182, 'Rice', 'OVERPRODUCTION', true),
+    log('log-6', providerId, 12, ['meal-sambar'], 2.9, 165, 174, 'Rice', 'QUALITY_ISSUE', false),
+    log('log-7', providerId, 15, ['meal-biryani'], 8.3, 190, 215, 'Mixed meal', 'OVERPRODUCTION', true),
+    log('log-8', secondProviderId, 2, ['meal-pulao'], 9.6, 320, 350, 'Rice', 'OVERPRODUCTION', true),
+    log('log-9', secondProviderId, 6, ['meal-chapati'], 4.1, 305, 320, 'Bread', 'OVERPRODUCTION', true)
+  ];
+  database.pickups = [
+    { id: 'pickup-active', providerId, providerName: 'Green Table Foods', wasteLogId: 'log-1', estimatedWeightKg: 7.4, eligibleRoles: ['FOOD_COLLECTOR'], status: 'AVAILABLE', availableFrom: iso(0, 16), pickupDeadline: iso(0, 20), locality: 'Coimbatore', collectionAddress: '12 Service Road, Coimbatore, Tamil Nadu 641001', collectionInstructions: 'Use the service entrance and ask for the food operations lead.', activity: [], createdAt: iso(-1, 14), updatedAt: iso(-1, 14) },
+    { id: 'pickup-reserved', providerId: secondProviderId, providerName: 'Sunrise Public School', wasteLogId: 'log-8', estimatedWeightKg: 9.6, eligibleRoles: ['FOOD_COLLECTOR'], status: 'RESERVED', reservedByAccountId: collectorId, reservedAt: iso(0, 12), reservationExpiresAt: iso(0, 18), availableFrom: iso(0, 13), pickupDeadline: iso(0, 19), locality: 'Coimbatore', collectionAddress: '45 Lake View Road, Coimbatore, Tamil Nadu 641018', collectionInstructions: 'Use the rear kitchen gate beside the staff parking area.', activity: [{ id: 'activity-reserved', fromStatus: 'AVAILABLE', toStatus: 'RESERVED', actorId: collectorId, actorName: 'Karthik Mani', reason: 'Reserved for this afternoon route.', createdAt: iso(0, 12) }], createdAt: iso(-2, 11), updatedAt: iso(0, 12) },
+    { id: 'pickup-collected', providerId, providerName: 'Green Table Foods', wasteLogId: 'log-2', estimatedWeightKg: 5.2, eligibleRoles: ['FOOD_COLLECTOR'], status: 'COLLECTED', reservedByAccountId: collectorId, reservedAt: iso(-3, 9), availableFrom: iso(-3, 10), pickupDeadline: iso(-3, 13), locality: 'Coimbatore', collectionAddress: '12 Service Road, Coimbatore, Tamil Nadu 641001', collectionInstructions: 'Use the service entrance and ask for the food operations lead.', activity: [{ id: 'activity-collected-1', fromStatus: 'AVAILABLE', toStatus: 'RESERVED', actorId: collectorId, actorName: 'Karthik Mani', reason: 'Reserved pickup.', createdAt: iso(-3, 9) }, { id: 'activity-collected-2', fromStatus: 'RESERVED', toStatus: 'IN_TRANSIT', actorId: collectorId, actorName: 'Karthik Mani', reason: 'Collector started transit.', createdAt: iso(-3, 10) }, { id: 'activity-collected-3', fromStatus: 'IN_TRANSIT', toStatus: 'COLLECTED', actorId: providerId, actorName: 'Ananya Rao', reason: 'Handoff confirmed at the service entrance.', createdAt: iso(-3, 12) }], createdAt: iso(-4, 14), updatedAt: iso(-3, 12) }
+  ];
+  database.accessRequests = [{ id: 'request-demo-1', applicantName: 'Rohan Iyer', role: 'FOOD_COLLECTOR', organizationTypeId: 'type-ngo-recovery', organizationName: 'Neighbourhood Harvest NGO', address: '8 Race Course Road, Coimbatore, Tamil Nadu 641018', email: 'rohan@neighbourhoodharvest.org', whatsapp: '+919845678901', preferredContactMethod: 'EMAIL', hasTransportFacilities: true, transportFacilities: 'One refrigerated van and two insulated collection carts.', contact: 'rohan@neighbourhoodharvest.org', organizationTypeName: 'NGO recovery service', requiredDocuments: [], documents: [], status: 'PENDING', createdAt: iso(-1, 9), submittedAt: iso(-1, 9) }];
+  const supportId = 'conversation-support-producer';
+  const pickupChatId = 'conversation-pickup-active';
+  database.chatConversations = [{ id: supportId, type: 'ADMIN_SUPPORT', state: 'OPEN', organizationAccountId: providerId, title: 'Green Table Foods · Admin support', participantAccountIds: [providerId], createdAt: iso(-4, 11), updatedAt: iso(-1, 15), unreadCount: 0 }, { id: pickupChatId, type: 'PICKUP', state: 'OPEN', pickupId: 'pickup-active', organizationAccountId: providerId, title: 'Green Table Foods · Collection', participantAccountIds: [providerId, collectorId], createdAt: iso(-1, 14), updatedAt: iso(-1, 15), unreadCount: 0 }];
+  database.chatParticipants = [{ conversationId: supportId, accountId: providerId, joinedAt: iso(-4, 11) }, { conversationId: supportId, accountId: 'acct-admin', joinedAt: iso(-4, 11), lastReadAt: iso(-1, 15) }, { conversationId: pickupChatId, accountId: providerId, joinedAt: iso(-1, 14) }, { conversationId: pickupChatId, accountId: collectorId, joinedAt: iso(-1, 14) }];
+  database.chatMessages = [{ id: 'message-support-system', conversationId: supportId, kind: 'SYSTEM', senderOrganizationName: 'Bloom', senderDisplayName: 'Bloom', text: 'This is a private conversation between your organization and Bloom administrators.', attachmentIds: [], idempotencyKey: 'support:presentation-producer', createdAt: iso(-4, 11) }, { id: 'message-support-admin', conversationId: supportId, kind: 'MESSAGE', senderAccountId: 'acct-admin', senderOrganizationName: 'Bloom', senderDisplayName: 'Bloom Administrator', text: 'Your pickup window looks good for today. Let us know if the kitchen schedule changes.', attachmentIds: [], idempotencyKey: 'presentation-support-1', createdAt: iso(-1, 15) }, { id: 'message-pickup-system', conversationId: pickupChatId, kind: 'SYSTEM', senderOrganizationName: 'Bloom', senderDisplayName: 'Bloom', text: 'This private conversation is shared by the producer and collector for this pickup.', attachmentIds: [], idempotencyKey: 'pickup:presentation-active', createdAt: iso(-1, 14) }, { id: 'message-pickup-collector', conversationId: pickupChatId, kind: 'MESSAGE', senderAccountId: collectorId, senderOrganizationName: 'Coimbatore Recovery Collective', senderDisplayName: 'Karthik Mani', text: 'I can reach the service entrance around 4:30 PM. Please keep the containers labelled by meal.', attachmentIds: [], idempotencyKey: 'presentation-pickup-1', createdAt: iso(-1, 15) }];
+  database.auditEvents = [{ id: 'audit-request', actorId: 'acct-admin', actorName: 'Bloom Administrator', action: 'REQUEST_REVIEW_STARTED', objectType: 'ACCESS_REQUEST', objectId: 'request-demo-1', objectLabel: 'Neighbourhood Harvest NGO', summary: 'Started review of a new Food Collector access request.', createdAt: iso(-1, 9) }, { id: 'audit-pickup', actorId: 'acct-admin', actorName: 'Bloom Administrator', action: 'PICKUP_REOPENED', objectType: 'PICKUP', objectId: 'pickup-reserved', objectLabel: 'Sunrise Public School', summary: 'Reviewed the reserved pickup record.', createdAt: iso(0, 12) }, { id: 'audit-collected', actorId: providerId, actorName: 'Ananya Rao', action: 'PICKUP_REOPENED', objectType: 'PICKUP', objectId: 'pickup-collected', objectLabel: 'Green Table Foods', summary: 'Recorded a completed collection handoff.', createdAt: iso(-3, 12) }];
+  return database;
+};
+
 const ensureLocalDemoAccounts = (database: Database) => {
   const localDemos: Array<Pick<StoredAccount, 'id' | 'role' | 'accessCode' | 'displayName' | 'organizationName' | 'contact' | 'email' | 'phone' | 'organizationTypeId' | 'locality' | 'collectionAddress' | 'collectionInstructions'> & { passphrase: string }> = [
     { id: 'acct-producer-demo', role: 'FOOD_WASTE_PRODUCER', accessCode: 'FWP-DEMO', passphrase: 'bloom-producer', displayName: 'Ananya Rao', organizationName: 'Green Table Foods', contact: 'ananya@example.org', email: 'ananya@example.org', phone: '+919876543210', organizationTypeId: 'type-community-kitchen', locality: 'Coimbatore', collectionAddress: '12 Service Road, Coimbatore, Tamil Nadu 641001', collectionInstructions: 'Use the service entrance and ask for the food operations lead.' },
@@ -164,7 +225,12 @@ export function normalizeDatabase(input: any): Database {
     }),
     meals: (raw.meals ?? []).map(({ schoolId, ...meal }: any) => ({ ...meal, providerId: meal.providerId ?? schoolId })),
     assignments: (raw.assignments ?? []).map(({ schoolId, ...assignment }: any) => ({ ...assignment, providerId: assignment.providerId ?? schoolId })),
-    logs: (raw.logs ?? []).map(({ schoolId, ...log }: any) => ({ ...log, providerId: log.providerId ?? schoolId })),
+    logs: (raw.logs ?? []).map(({ schoolId, ...log }: any) => ({
+      ...log,
+      providerId: log.providerId ?? schoolId,
+      mealIds: Array.isArray(log.mealIds) ? log.mealIds : [],
+      recordedAt: log.recordedAt ?? (log.createdAt || `${log.date}T00:00:00.000Z`)
+    })),
     pickups: (raw.pickups ?? []).map(({ schoolId, destination: _destination, expiresAt, ...pickup }: any) => {
       const providerId = pickup.providerId ?? schoolId;
       const provider = (raw.accounts ?? []).find((account: any) => account.id === providerId);
@@ -200,12 +266,12 @@ function migratePublicRole(role: string): PublicAccountRole {
 
 export class FileRepository implements Repository {
   private queue = Promise.resolve();
-  constructor(private readonly filePath = resolve(process.cwd(), 'data/dev.json')) {}
+  constructor(private readonly filePath = resolve(process.cwd(), process.env.PRESENTATION_MODE === 'true' ? 'data/presentation.json' : 'data/dev.json')) {}
 
   private async ensure() {
     await mkdir(dirname(this.filePath), { recursive: true });
     try { await readFile(this.filePath, 'utf8'); }
-    catch { await this.write(seedDatabase()); }
+    catch { await this.write(process.env.PRESENTATION_MODE === 'true' ? presentationDatabase() : seedDatabase()); }
   }
 
   private async write(database: Database) {

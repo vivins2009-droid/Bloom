@@ -5,7 +5,7 @@ import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { z } from 'zod';
 import { WebSocket, WebSocketServer } from 'ws';
-import type { Account, AccountRole, AccessRequest, AdminAuditAction, ChatConversation, ChatMessage, DailyWasteLog, MealAssignment, Pickup, PickupStatus, PublicAccountRole, RecoveryRole } from '@bloom/contracts';
+import type { Account, AccountRole, AccessRequest, AdminAuditAction, ChatConversation, ChatMessage, DailyWasteLog, MealAssignment, OrganizationType, Pickup, PickupStatus, PublicAccountRole, RecoveryRole } from '@bloom/contracts';
 import { ACTIVE_PICKUP_STATUSES, calculateInsights, calculateRecommendation, reconcilePickups, recurrenceDates, roleCanRecoverPickup } from './domain.js';
 import { createAccessCode, createPassphrase, createRepository, hashPassphrase, verifyPassphrase, type Repository } from './repository.js';
 import { deleteAttachment, getAttachment, putAttachment, sanitizeImage, validateDocument } from './storage.js';
@@ -67,9 +67,9 @@ app.use((req: AuthedRequest, res, next) => {
 const asyncRoute = (handler: (req: AuthedRequest, res: Response, next: NextFunction) => Promise<void>) =>
   (req: AuthedRequest, res: Response, next: NextFunction) => handler(req, res, next).catch(next);
 
-const publicAccount = (account: any): Account => {
+const publicAccount = (account: any, organizationTypes: OrganizationType[] = []): Account => {
   const { passphraseHash: _passphraseHash, ...safe } = account;
-  return safe;
+  return { ...safe, organizationTypeName: safe.organizationTypeId ? organizationTypes.find((type) => type.id === safe.organizationTypeId)?.name : undefined };
 };
 
 const authenticate = asyncRoute(async (req, res, next) => {
@@ -259,7 +259,7 @@ app.post('/api/auth/login', rateLimit('login', 12, 15 * 60000), asyncRoute(async
   await repository.mutate((state) => state.sessions.push({ tokenHash: tokenHash(token), csrfHash: tokenHash(csrf), accountId: stored.id, createdAt: now.toISOString(), lastActivityAt: now.toISOString(), expiresAt: new Date(now.getTime() + SESSION_MS).toISOString() }));
   res.cookie('bloom_session', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: SESSION_MS });
   res.setHeader('x-csrf-token', csrf);
-  res.json(publicAccount(stored));
+  res.json(publicAccount(stored, db.organizationTypes));
 }));
 
 app.post('/api/auth/request-password-reset', rateLimit('password-reset', 6, 3600000), asyncRoute(async (req, res) => {
@@ -283,7 +283,8 @@ app.post('/api/auth/complete-account-link', rateLimit('account-link', 12, 15 * 6
 app.get('/api/auth/me', authenticate, asyncRoute(async (req, res) => {
   const csrf = makeToken();
   await repository.refreshSession(req.sessionTokenHash!, tokenHash(csrf), new Date().toISOString());
-  res.setHeader('x-csrf-token', csrf); res.json(req.account);
+  const db = await repository.read();
+  res.setHeader('x-csrf-token', csrf); res.json(publicAccount(req.account, db.organizationTypes));
 }));
 app.post('/api/auth/logout', authenticate, asyncRoute(async (req, res) => {
   await repository.mutate((state) => { const session = state.sessions.find((item) => item.tokenHash === req.sessionTokenHash); if (session) session.revokedAt = new Date().toISOString(); });
@@ -298,7 +299,7 @@ app.post('/api/auth/change-passphrase', authenticate, asyncRoute(async (req, res
     account.passphraseHash = hashPassphrase(input.passphrase);
     account.firstLogin = false;
     db.sessions.forEach((session) => { if (session.accountId === account.id && session.tokenHash !== req.sessionTokenHash) session.revokedAt = new Date().toISOString(); });
-    return publicAccount(account);
+    return publicAccount(account, db.organizationTypes);
   });
   await rotateSession(updated.id, res);
   res.json(updated);
@@ -310,7 +311,7 @@ app.patch('/api/account/profile', authenticate, asyncRoute(async (req, res) => {
     const account = db.accounts.find((item) => item.id === req.account!.id)!;
     const previous = account.displayName; account.displayName = displayName;
     addAudit(db, req.account!, { action: 'ACCOUNT_HOLDER_UPDATED', objectType: 'ACCOUNT', objectId: account.id, objectLabel: account.organizationName, summary: `Changed account holder from ${previous} to ${displayName}.` });
-    return publicAccount(account);
+    return publicAccount(account, db.organizationTypes);
   });
   res.json(updated);
 }));
@@ -327,7 +328,7 @@ app.patch('/api/account/collection-profile', authenticate, requireRole('FOOD_WAS
     db.pickups.filter((pickup) => pickup.providerId === account.id && pickup.status === 'AVAILABLE' && !pickup.collectionAddress).forEach((pickup) => {
       pickup.locality = input.locality; pickup.collectionAddress = input.collectionAddress; pickup.collectionInstructions = input.collectionInstructions; pickup.updatedAt = new Date().toISOString();
     });
-    return publicAccount(account);
+    return publicAccount(account, db.organizationTypes);
   });
   res.json(updated);
 }));
@@ -340,7 +341,7 @@ app.post('/api/account/change-passphrase', authenticate, asyncRoute(async (req, 
     account.passphraseHash = hashPassphrase(input.newPassphrase); account.firstLogin = false;
     db.sessions.forEach((session) => { if (session.accountId === account.id && session.tokenHash !== req.sessionTokenHash) session.revokedAt = new Date().toISOString(); });
     addAudit(db, req.account!, { action: 'ACCOUNT_PASSPHRASE_CHANGED', objectType: 'ACCOUNT', objectId: account.id, objectLabel: account.organizationName, summary: 'Changed the account passphrase.' });
-    return publicAccount(account);
+    return publicAccount(account, db.organizationTypes);
   });
   if (!result) { res.status(401).json({ error: { code: 'CURRENT_PASSPHRASE_INCORRECT', message: 'The current passphrase is incorrect.' } }); return; }
   await rotateSession(result.id, res);
@@ -530,7 +531,7 @@ app.get('/api/admin/overview', authenticate, requireRole('ADMIN'), asyncRoute(as
 
 app.get('/api/admin/accounts', authenticate, requireRole('ADMIN'), asyncRoute(async (_req, res) => {
   const db = await repository.read();
-  res.json({ data: db.accounts.filter((item) => item.role !== 'ADMIN').map(publicAccount) });
+  res.json({ data: db.accounts.filter((item) => item.role !== 'ADMIN').map((item) => publicAccount(item, db.organizationTypes)) });
 }));
 
 app.post('/api/admin/accounts', authenticate, requireRole('ADMIN'), asyncRoute(async (req, res) => {
@@ -542,8 +543,8 @@ app.post('/api/admin/accounts', authenticate, requireRole('ADMIN'), asyncRoute(a
     const stored = { id: randomUUID(), ...input, email: input.contact, accessCode, passphraseHash: hashPassphrase(passphrase), status: 'ACTIVE' as const, firstLogin: true, createdAt: new Date().toISOString() };
     db.accounts.push(stored);
     addAudit(db, req.account!, { action: 'ACCOUNT_CREATED', objectType: 'ACCOUNT', objectId: stored.id, objectLabel: stored.organizationName, summary: `Created ${type.name} account ${accessCode}.` });
-    if (process.env.NODE_ENV === 'production') { const setup = queueAccountLink(db, publicAccount(stored), 'SETUP', 24 * 60); return { account: publicAccount(stored), accessCode, setupEmail: setup.email }; }
-    return { account: publicAccount(stored), accessCode, passphrase };
+    if (process.env.NODE_ENV === 'production') { const setup = queueAccountLink(db, publicAccount(stored, db.organizationTypes), 'SETUP', 24 * 60); return { account: publicAccount(stored, db.organizationTypes), accessCode, setupEmail: setup.email }; }
+    return { account: publicAccount(stored, db.organizationTypes), accessCode, passphrase };
   });
   if (!result) { res.status(422).json({ error: { code: 'INVALID_ORGANIZATION_TYPE', message: 'Choose an active organization type for this role.' } }); return; }
   res.status(201).json(result);
@@ -558,7 +559,7 @@ app.patch('/api/admin/accounts/:id/type', authenticate, requireRole('ADMIN'), as
     if (!type) return { kind: 'invalid' as const };
     account.organizationTypeId = type.id;
     addAudit(db, req.account!, { action: 'ACCOUNT_TYPE_CHANGED', objectType: 'ACCOUNT', objectId: account.id, objectLabel: account.organizationName, summary: `Changed organization type to ${type.name}.` });
-    return { kind: 'updated' as const, account: publicAccount(account) };
+    return { kind: 'updated' as const, account: publicAccount(account, db.organizationTypes) };
   });
   if (result.kind === 'missing') { res.status(404).json({ error: { code: 'ACCOUNT_NOT_FOUND', message: 'That account could not be found.' } }); return; }
   if (result.kind === 'invalid') { res.status(422).json({ error: { code: 'INVALID_ORGANIZATION_TYPE', message: 'Choose an active type for this account role.' } }); return; }
@@ -709,16 +710,26 @@ app.get('/api/waste-logs', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asy
   res.json({ data, pagination: { page: 1, pageSize: 100, totalItems: data.length, totalPages: 1 } });
 }));
 
+const editableLogInput = z.object({
+  recordedAt: z.iso.datetime(),
+  servicePeriod: z.enum(['BREAKFAST', 'LUNCH', 'DINNER', 'ALL_DAY', 'EVENT', 'OTHER']),
+  wasteStage: z.enum(['PREPARATION', 'STORAGE_SPOILAGE', 'OVERPRODUCTION', 'PLATE_RETURN', 'OTHER']),
+  foodCategory: z.string().trim().max(80).default(''),
+  leftoverKg: z.number().positive().max(500),
+  reason: z.enum(['LOW_DEMAND', 'FORECAST_VARIANCE', 'CUSTOMER_PREFERENCE', 'PORTION_SIZE', 'QUALITY_ISSUE', 'PROCESS_ERROR', 'OVERPRODUCTION', 'PREPARATION_WASTE', 'OTHER']),
+  suitableForCollection: z.boolean(),
+  notes: z.string().trim().max(500).default('')
+});
+
 app.post('/api/waste-logs', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
-  const input = z.object({ date: z.iso.date(), mealIds: z.array(z.string()).min(1), actualAttendance: z.number().int().min(1), servingsPrepared: z.number().int().min(1), leftoverKg: z.number().min(0).max(500), reason: z.enum(['LOW_ATTENDANCE', 'MENU_PREFERENCE', 'OVERPRODUCTION', 'PREPARATION_WASTE', 'OTHER']), suitableForCollection: z.boolean(), notes: z.string().trim().max(500) }).parse(req.body);
+  const input = editableLogInput.parse(req.body);
   const result = await repository.mutate((db) => {
-    const log: DailyWasteLog = { id: randomUUID(), providerId: req.account!.id, ...input, createdAt: new Date().toISOString() };
+    const log: DailyWasteLog = { id: randomUUID(), providerId: req.account!.id, date: input.recordedAt.slice(0, 10), mealIds: [], ...input, createdAt: new Date().toISOString() };
     db.logs.push(log); return log;
   });
   res.status(201).json(result);
 }));
 
-const editableLogInput = z.object({ date: z.iso.date(), mealIds: z.array(z.string()).min(1), actualAttendance: z.number().int().min(1), servingsPrepared: z.number().int().min(1), leftoverKg: z.number().min(0).max(500), reason: z.enum(['LOW_ATTENDANCE', 'MENU_PREFERENCE', 'OVERPRODUCTION', 'PREPARATION_WASTE', 'OTHER']), suitableForCollection: z.boolean(), notes: z.string().trim().max(500) });
 const lockedPickupStatuses: PickupStatus[] = ['RESERVED', 'IN_TRANSIT', 'AWAITING_PROVIDER_CONFIRMATION', 'COLLECTED'];
 
 app.put('/api/waste-logs/:id', authenticate, requireRole('FOOD_WASTE_PRODUCER'), asyncRoute(async (req, res) => {
@@ -729,6 +740,7 @@ app.put('/api/waste-logs/:id', authenticate, requireRole('FOOD_WASTE_PRODUCER'),
     const pickup = log.pickupId ? db.pickups.find((item) => item.id === log.pickupId) : undefined;
     if (pickup && lockedPickupStatuses.includes(pickup.status)) return { kind: 'locked' as const };
     Object.assign(log, input);
+    log.date = input.recordedAt.slice(0, 10);
     if (pickup && !input.suitableForCollection) { db.pickups = db.pickups.filter((item) => item.id !== pickup.id); delete log.pickupId; }
     else if (pickup) { pickup.estimatedWeightKg = input.leftoverKg; pickup.updatedAt = new Date().toISOString(); }
     return { kind: 'updated' as const, log };

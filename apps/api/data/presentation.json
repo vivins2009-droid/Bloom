@@ -1,0 +1,795 @@
+{
+  "schemaVersion": 5,
+  "organizationTypes": [
+    {
+      "id": "type-public-school",
+      "role": "FOOD_WASTE_PRODUCER",
+      "name": "Public school",
+      "sortOrder": 0,
+      "active": false,
+      "documentRequirements": [],
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "updatedAt": "2026-09-18T05:21:41.392Z"
+    },
+    {
+      "id": "type-private-school",
+      "role": "FOOD_WASTE_PRODUCER",
+      "name": "Private school",
+      "sortOrder": 1,
+      "active": true,
+      "documentRequirements": [],
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "updatedAt": "2026-09-18T05:21:41.392Z"
+    },
+    {
+      "id": "type-college",
+      "role": "FOOD_WASTE_PRODUCER",
+      "name": "College / University",
+      "sortOrder": 2,
+      "active": true,
+      "documentRequirements": [],
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "updatedAt": "2026-09-18T05:21:41.392Z"
+    },
+    {
+      "id": "type-small-restaurant",
+      "role": "FOOD_WASTE_PRODUCER",
+      "name": "Small restaurant",
+      "sortOrder": 3,
+      "active": true,
+      "documentRequirements": [],
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "updatedAt": "2026-09-18T05:21:41.392Z"
+    },
+    {
+      "id": "type-large-restaurant",
+      "role": "FOOD_WASTE_PRODUCER",
+      "name": "Large restaurant",
+      "sortOrder": 4,
+      "active": true,
+      "documentRequirements": [],
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "updatedAt": "2026-09-18T05:21:41.392Z"
+    },
+    {
+      "id": "type-community-kitchen",
+      "role": "FOOD_WASTE_PRODUCER",
+      "name": "Community kitchen",
+      "sortOrder": 5,
+      "active": true,
+      "documentRequirements": [],
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "updatedAt": "2026-09-18T05:21:41.392Z"
+    },
+    {
+      "id": "type-farmer",
+      "role": "FOOD_COLLECTOR",
+      "name": "Farmer / Livestock owner",
+      "sortOrder": 0,
+      "active": false,
+      "documentRequirements": [],
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "updatedAt": "2026-09-18T05:21:41.392Z"
+    },
+    {
+      "id": "type-independent-collector",
+      "role": "FOOD_COLLECTOR",
+      "name": "Independent collector",
+      "sortOrder": 1,
+      "active": true,
+      "documentRequirements": [],
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "updatedAt": "2026-09-18T05:21:41.392Z"
+    },
+    {
+      "id": "type-ngo-recovery",
+      "role": "FOOD_COLLECTOR",
+      "name": "NGO recovery service",
+      "sortOrder": 2,
+      "active": true,
+      "documentRequirements": [],
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "updatedAt": "2026-09-18T05:21:41.392Z"
+    },
+    {
+      "id": "type-municipal-collector",
+      "role": "FOOD_COLLECTOR",
+      "name": "Municipal collector",
+      "sortOrder": 3,
+      "active": false,
+      "documentRequirements": [],
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "updatedAt": "2026-09-18T05:21:41.392Z"
+    },
+    {
+      "id": "type-community-composter",
+      "role": "FOOD_COLLECTOR",
+      "name": "Community composter",
+      "sortOrder": 4,
+      "active": true,
+      "documentRequirements": [],
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "updatedAt": "2026-09-18T05:21:41.392Z"
+    },
+    {
+      "id": "type-commercial-compost",
+      "role": "FOOD_COLLECTOR",
+      "name": "Commercial compost facility",
+      "sortOrder": 5,
+      "active": false,
+      "documentRequirements": [],
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "updatedAt": "2026-09-18T05:21:41.392Z"
+    },
+    {
+      "id": "type-vermicompost",
+      "role": "FOOD_COLLECTOR",
+      "name": "Vermicompost facility",
+      "sortOrder": 6,
+      "active": false,
+      "documentRequirements": [],
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "updatedAt": "2026-09-18T05:21:41.392Z"
+    }
+  ],
+  "auditEvents": [
+    {
+      "id": "audit-request",
+      "actorId": "acct-admin",
+      "actorName": "Bloom Administrator",
+      "action": "REQUEST_REVIEW_STARTED",
+      "objectType": "ACCESS_REQUEST",
+      "objectId": "request-demo-1",
+      "objectLabel": "Neighbourhood Harvest NGO",
+      "summary": "Started review of a new Food Collector access request.",
+      "createdAt": "2026-09-17T03:30:00.000Z"
+    },
+    {
+      "id": "audit-pickup",
+      "actorId": "acct-admin",
+      "actorName": "Bloom Administrator",
+      "action": "PICKUP_REOPENED",
+      "objectType": "PICKUP",
+      "objectId": "pickup-reserved",
+      "objectLabel": "Sunrise Public School",
+      "summary": "Reviewed the reserved pickup record.",
+      "createdAt": "2026-09-18T06:30:00.000Z"
+    },
+    {
+      "id": "audit-collected",
+      "actorId": "acct-producer-demo",
+      "actorName": "Ananya Rao",
+      "action": "PICKUP_REOPENED",
+      "objectType": "PICKUP",
+      "objectId": "pickup-collected",
+      "objectLabel": "Green Table Foods",
+      "summary": "Recorded a completed collection handoff.",
+      "createdAt": "2026-09-15T06:30:00.000Z"
+    }
+  ],
+  "organizationNameRequests": [],
+  "accounts": [
+    {
+      "id": "acct-producer-demo",
+      "role": "FOOD_WASTE_PRODUCER",
+      "accessCode": "FWP-DEMO",
+      "passphraseHash": "scrypt-v1:0042f966d3b402aaddec6e93481aa03f:bba70856f830796fe6367efb06a8d6e37fb1044d9403b6e39457f87e69332465",
+      "displayName": "Ananya Rao",
+      "organizationName": "Green Table Foods",
+      "contact": "ananya@example.org",
+      "email": "ananya@example.org",
+      "phone": "+919876543210",
+      "organizationTypeId": "type-community-kitchen",
+      "status": "ACTIVE",
+      "firstLogin": false,
+      "locality": "Coimbatore",
+      "collectionAddress": "12 Service Road, Coimbatore, Tamil Nadu 641001",
+      "collectionInstructions": "Use the service entrance and ask for the food operations lead.",
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "contactNeedsReview": false
+    },
+    {
+      "id": "acct-admin",
+      "role": "ADMIN",
+      "accessCode": "ADMIN-BLOOM",
+      "passphraseHash": "scrypt-v1:f47465cbc05103cae22eb48815971de8:990e8868f9db7f307351712b566cfc5f55d6b687b2c17c13a8f80946bd10c8a9",
+      "displayName": "Bloom Administrator",
+      "organizationName": "Bloom Operations",
+      "contact": "admin@example.org",
+      "email": "admin@example.org",
+      "status": "ACTIVE",
+      "firstLogin": false,
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "contactNeedsReview": false
+    },
+    {
+      "id": "acct-provider-sunrise",
+      "role": "FOOD_WASTE_PRODUCER",
+      "accessCode": "FWP-SUNRISE",
+      "passphraseHash": "scrypt-v1:e3074dfb2cb2ed0c9282e09f2f5125b1:8a99cd6975bc3b5768896228c6108a7e8f6a028e3f0dac1d8e7196ade87d178b",
+      "displayName": "Meera Krishnan",
+      "organizationName": "Sunrise Public School",
+      "contact": "meera@sunriseschool.org",
+      "email": "meera@sunriseschool.org",
+      "phone": "+919812345678",
+      "organizationTypeId": "type-private-school",
+      "status": "ACTIVE",
+      "firstLogin": false,
+      "locality": "Coimbatore",
+      "collectionAddress": "45 Lake View Road, Coimbatore, Tamil Nadu 641018",
+      "collectionInstructions": "Use the rear kitchen gate beside the staff parking area.",
+      "createdAt": "2026-08-31T04:30:00.000Z",
+      "contactNeedsReview": false
+    },
+    {
+      "id": "acct-collector-demo",
+      "role": "FOOD_COLLECTOR",
+      "accessCode": "FCL-DEMO",
+      "displayName": "Karthik Mani",
+      "organizationName": "Coimbatore Recovery Collective",
+      "contact": "collector@example.org",
+      "email": "collector@example.org",
+      "organizationTypeId": "type-independent-collector",
+      "passphraseHash": "scrypt-v1:10e9d4a3f1701c0e4ea6c6c326bd6082:b1bcd1c633c8e539530cc81749bec7560e70db7e57f651cbec2fd22841acde6a",
+      "status": "ACTIVE",
+      "firstLogin": false,
+      "createdAt": "2026-09-18T05:21:41.392Z",
+      "contactNeedsReview": false
+    }
+  ],
+  "accessRequests": [
+    {
+      "id": "request-demo-1",
+      "applicantName": "Rohan Iyer",
+      "role": "FOOD_COLLECTOR",
+      "organizationTypeId": "type-ngo-recovery",
+      "organizationName": "Neighbourhood Harvest NGO",
+      "address": "8 Race Course Road, Coimbatore, Tamil Nadu 641018",
+      "email": "rohan@neighbourhoodharvest.org",
+      "whatsapp": "+919845678901",
+      "preferredContactMethod": "EMAIL",
+      "hasTransportFacilities": true,
+      "transportFacilities": "One refrigerated van and two insulated collection carts.",
+      "contact": "rohan@neighbourhoodharvest.org",
+      "organizationTypeName": "NGO recovery service",
+      "requiredDocuments": [],
+      "documents": [],
+      "status": "PENDING",
+      "createdAt": "2026-09-17T03:30:00.000Z",
+      "submittedAt": "2026-09-17T03:30:00.000Z"
+    }
+  ],
+  "meals": [
+    {
+      "id": "meal-tomato",
+      "providerId": "acct-producer-demo",
+      "name": "Tomato rice with pepper egg",
+      "createdAt": "2026-08-19T04:30:00.000Z"
+    },
+    {
+      "id": "meal-sambar",
+      "providerId": "acct-producer-demo",
+      "name": "Sambar rice and boiled egg",
+      "createdAt": "2026-08-19T04:30:00.000Z"
+    },
+    {
+      "id": "meal-biryani",
+      "providerId": "acct-producer-demo",
+      "name": "Vegetable biryani",
+      "createdAt": "2026-08-25T04:30:00.000Z"
+    },
+    {
+      "id": "meal-lemon",
+      "providerId": "acct-producer-demo",
+      "name": "Lemon rice and vegetable korma",
+      "createdAt": "2026-09-02T04:30:00.000Z"
+    },
+    {
+      "id": "meal-pulao",
+      "providerId": "acct-provider-sunrise",
+      "name": "Vegetable pulao",
+      "createdAt": "2026-09-02T04:30:00.000Z"
+    },
+    {
+      "id": "meal-chapati",
+      "providerId": "acct-provider-sunrise",
+      "name": "Chapati and chana masala",
+      "createdAt": "2026-09-06T04:30:00.000Z"
+    }
+  ],
+  "assignments": [
+    {
+      "id": "assign-today",
+      "providerId": "acct-producer-demo",
+      "date": "2026-09-18",
+      "mealIds": [
+        "meal-tomato"
+      ],
+      "recurrence": {
+        "frequency": "NONE"
+      },
+      "createdAt": "2026-09-16T04:30:00.000Z"
+    },
+    {
+      "id": "assign-tomorrow",
+      "providerId": "acct-producer-demo",
+      "date": "2026-09-19",
+      "mealIds": [
+        "meal-sambar"
+      ],
+      "recurrence": {
+        "frequency": "NONE"
+      },
+      "createdAt": "2026-09-16T04:30:00.000Z"
+    },
+    {
+      "id": "assign-friday",
+      "providerId": "acct-producer-demo",
+      "date": "2026-09-21",
+      "mealIds": [
+        "meal-biryani"
+      ],
+      "recurrence": {
+        "frequency": "NONE"
+      },
+      "createdAt": "2026-09-16T04:30:00.000Z"
+    },
+    {
+      "id": "assign-school-today",
+      "providerId": "acct-provider-sunrise",
+      "date": "2026-09-18",
+      "mealIds": [
+        "meal-pulao"
+      ],
+      "recurrence": {
+        "frequency": "NONE"
+      },
+      "createdAt": "2026-09-13T04:30:00.000Z"
+    },
+    {
+      "id": "assign-school-next",
+      "providerId": "acct-provider-sunrise",
+      "date": "2026-09-20",
+      "mealIds": [
+        "meal-chapati"
+      ],
+      "recurrence": {
+        "frequency": "NONE"
+      },
+      "createdAt": "2026-09-13T04:30:00.000Z"
+    }
+  ],
+  "logs": [
+    {
+      "id": "log-1",
+      "providerId": "acct-producer-demo",
+      "date": "2026-09-17",
+      "mealIds": [
+        "meal-tomato"
+      ],
+      "actualAttendance": 182,
+      "servingsPrepared": 205,
+      "recordedAt": "2026-09-17T08:30:00.000Z",
+      "servicePeriod": "LUNCH",
+      "wasteStage": "OVERPRODUCTION",
+      "foodCategory": "Rice",
+      "leftoverKg": 7.4,
+      "reason": "OVERPRODUCTION",
+      "suitableForCollection": true,
+      "notes": "Packed in clean, labelled containers and ready for collection.",
+      "createdAt": "2026-09-17T08:30:00.000Z"
+    },
+    {
+      "id": "log-2",
+      "providerId": "acct-producer-demo",
+      "date": "2026-09-15",
+      "mealIds": [
+        "meal-sambar"
+      ],
+      "actualAttendance": 176,
+      "servingsPrepared": 190,
+      "recordedAt": "2026-09-15T08:30:00.000Z",
+      "servicePeriod": "LUNCH",
+      "wasteStage": "OVERPRODUCTION",
+      "foodCategory": "Rice",
+      "leftoverKg": 5.2,
+      "reason": "OVERPRODUCTION",
+      "suitableForCollection": true,
+      "notes": "Packed in clean, labelled containers and ready for collection.",
+      "createdAt": "2026-09-15T08:30:00.000Z"
+    },
+    {
+      "id": "log-3",
+      "providerId": "acct-producer-demo",
+      "date": "2026-09-13",
+      "mealIds": [
+        "meal-biryani"
+      ],
+      "actualAttendance": 168,
+      "servingsPrepared": 178,
+      "recordedAt": "2026-09-13T08:30:00.000Z",
+      "servicePeriod": "LUNCH",
+      "wasteStage": "OVERPRODUCTION",
+      "foodCategory": "Mixed meal",
+      "leftoverKg": 3.8,
+      "reason": "OVERPRODUCTION",
+      "suitableForCollection": true,
+      "notes": "Packed in clean, labelled containers and ready for collection.",
+      "createdAt": "2026-09-13T08:30:00.000Z"
+    },
+    {
+      "id": "log-4",
+      "providerId": "acct-producer-demo",
+      "date": "2026-09-11",
+      "mealIds": [
+        "meal-lemon"
+      ],
+      "actualAttendance": 180,
+      "servingsPrepared": 195,
+      "recordedAt": "2026-09-11T08:30:00.000Z",
+      "servicePeriod": "LUNCH",
+      "wasteStage": "OVERPRODUCTION",
+      "foodCategory": "Rice",
+      "leftoverKg": 6.1,
+      "reason": "OVERPRODUCTION",
+      "suitableForCollection": true,
+      "notes": "Packed in clean, labelled containers and ready for collection.",
+      "createdAt": "2026-09-11T08:30:00.000Z"
+    },
+    {
+      "id": "log-5",
+      "providerId": "acct-producer-demo",
+      "date": "2026-09-09",
+      "mealIds": [
+        "meal-tomato"
+      ],
+      "actualAttendance": 171,
+      "servingsPrepared": 182,
+      "recordedAt": "2026-09-09T08:30:00.000Z",
+      "servicePeriod": "LUNCH",
+      "wasteStage": "OVERPRODUCTION",
+      "foodCategory": "Rice",
+      "leftoverKg": 4.5,
+      "reason": "OVERPRODUCTION",
+      "suitableForCollection": true,
+      "notes": "Packed in clean, labelled containers and ready for collection.",
+      "createdAt": "2026-09-09T08:30:00.000Z"
+    },
+    {
+      "id": "log-6",
+      "providerId": "acct-producer-demo",
+      "date": "2026-09-06",
+      "mealIds": [
+        "meal-sambar"
+      ],
+      "actualAttendance": 165,
+      "servingsPrepared": 174,
+      "recordedAt": "2026-09-06T08:30:00.000Z",
+      "servicePeriod": "LUNCH",
+      "wasteStage": "OVERPRODUCTION",
+      "foodCategory": "Rice",
+      "leftoverKg": 2.9,
+      "reason": "QUALITY_ISSUE",
+      "suitableForCollection": false,
+      "notes": "Used for staff meal and compost segregation.",
+      "createdAt": "2026-09-06T08:30:00.000Z"
+    },
+    {
+      "id": "log-7",
+      "providerId": "acct-producer-demo",
+      "date": "2026-09-03",
+      "mealIds": [
+        "meal-biryani"
+      ],
+      "actualAttendance": 190,
+      "servingsPrepared": 215,
+      "recordedAt": "2026-09-03T08:30:00.000Z",
+      "servicePeriod": "LUNCH",
+      "wasteStage": "OVERPRODUCTION",
+      "foodCategory": "Mixed meal",
+      "leftoverKg": 8.3,
+      "reason": "OVERPRODUCTION",
+      "suitableForCollection": true,
+      "notes": "Packed in clean, labelled containers and ready for collection.",
+      "createdAt": "2026-09-03T08:30:00.000Z"
+    },
+    {
+      "id": "log-8",
+      "providerId": "acct-provider-sunrise",
+      "date": "2026-09-16",
+      "mealIds": [
+        "meal-pulao"
+      ],
+      "actualAttendance": 320,
+      "servingsPrepared": 350,
+      "recordedAt": "2026-09-16T08:30:00.000Z",
+      "servicePeriod": "LUNCH",
+      "wasteStage": "OVERPRODUCTION",
+      "foodCategory": "Rice",
+      "leftoverKg": 9.6,
+      "reason": "OVERPRODUCTION",
+      "suitableForCollection": true,
+      "notes": "Packed in clean, labelled containers and ready for collection.",
+      "createdAt": "2026-09-16T08:30:00.000Z"
+    },
+    {
+      "id": "log-9",
+      "providerId": "acct-provider-sunrise",
+      "date": "2026-09-12",
+      "mealIds": [
+        "meal-chapati"
+      ],
+      "actualAttendance": 305,
+      "servingsPrepared": 320,
+      "recordedAt": "2026-09-12T08:30:00.000Z",
+      "servicePeriod": "LUNCH",
+      "wasteStage": "OVERPRODUCTION",
+      "foodCategory": "Bread",
+      "leftoverKg": 4.1,
+      "reason": "OVERPRODUCTION",
+      "suitableForCollection": true,
+      "notes": "Packed in clean, labelled containers and ready for collection.",
+      "createdAt": "2026-09-12T08:30:00.000Z"
+    }
+  ],
+  "pickups": [
+    {
+      "id": "pickup-active",
+      "providerId": "acct-producer-demo",
+      "providerName": "Green Table Foods",
+      "wasteLogId": "log-1",
+      "estimatedWeightKg": 7.4,
+      "eligibleRoles": [
+        "FOOD_COLLECTOR"
+      ],
+      "status": "AVAILABLE",
+      "availableFrom": "2026-09-18T10:30:00.000Z",
+      "pickupDeadline": "2026-09-18T14:30:00.000Z",
+      "locality": "Coimbatore",
+      "collectionAddress": "12 Service Road, Coimbatore, Tamil Nadu 641001",
+      "collectionInstructions": "Use the service entrance and ask for the food operations lead.",
+      "activity": [],
+      "createdAt": "2026-09-17T08:30:00.000Z",
+      "updatedAt": "2026-09-17T08:30:00.000Z"
+    },
+    {
+      "id": "pickup-reserved",
+      "providerId": "acct-provider-sunrise",
+      "providerName": "Sunrise Public School",
+      "wasteLogId": "log-8",
+      "estimatedWeightKg": 9.6,
+      "eligibleRoles": [
+        "FOOD_COLLECTOR"
+      ],
+      "status": "RESERVED",
+      "reservedByAccountId": "acct-collector-demo",
+      "reservedAt": "2026-09-18T06:30:00.000Z",
+      "reservationExpiresAt": "2026-09-18T12:30:00.000Z",
+      "availableFrom": "2026-09-18T07:30:00.000Z",
+      "pickupDeadline": "2026-09-18T13:30:00.000Z",
+      "locality": "Coimbatore",
+      "collectionAddress": "45 Lake View Road, Coimbatore, Tamil Nadu 641018",
+      "collectionInstructions": "Use the rear kitchen gate beside the staff parking area.",
+      "activity": [
+        {
+          "id": "activity-reserved",
+          "fromStatus": "AVAILABLE",
+          "toStatus": "RESERVED",
+          "actorId": "acct-collector-demo",
+          "actorName": "Karthik Mani",
+          "reason": "Reserved for this afternoon route.",
+          "createdAt": "2026-09-18T06:30:00.000Z"
+        }
+      ],
+      "createdAt": "2026-09-16T05:30:00.000Z",
+      "updatedAt": "2026-09-18T06:30:00.000Z"
+    },
+    {
+      "id": "pickup-collected",
+      "providerId": "acct-producer-demo",
+      "providerName": "Green Table Foods",
+      "wasteLogId": "log-2",
+      "estimatedWeightKg": 5.2,
+      "eligibleRoles": [
+        "FOOD_COLLECTOR"
+      ],
+      "status": "COLLECTED",
+      "reservedByAccountId": "acct-collector-demo",
+      "reservedAt": "2026-09-15T03:30:00.000Z",
+      "availableFrom": "2026-09-15T04:30:00.000Z",
+      "pickupDeadline": "2026-09-15T07:30:00.000Z",
+      "locality": "Coimbatore",
+      "collectionAddress": "12 Service Road, Coimbatore, Tamil Nadu 641001",
+      "collectionInstructions": "Use the service entrance and ask for the food operations lead.",
+      "activity": [
+        {
+          "id": "activity-collected-1",
+          "fromStatus": "AVAILABLE",
+          "toStatus": "RESERVED",
+          "actorId": "acct-collector-demo",
+          "actorName": "Karthik Mani",
+          "reason": "Reserved pickup.",
+          "createdAt": "2026-09-15T03:30:00.000Z"
+        },
+        {
+          "id": "activity-collected-2",
+          "fromStatus": "RESERVED",
+          "toStatus": "IN_TRANSIT",
+          "actorId": "acct-collector-demo",
+          "actorName": "Karthik Mani",
+          "reason": "Collector started transit.",
+          "createdAt": "2026-09-15T04:30:00.000Z"
+        },
+        {
+          "id": "activity-collected-3",
+          "fromStatus": "IN_TRANSIT",
+          "toStatus": "COLLECTED",
+          "actorId": "acct-producer-demo",
+          "actorName": "Ananya Rao",
+          "reason": "Handoff confirmed at the service entrance.",
+          "createdAt": "2026-09-15T06:30:00.000Z"
+        }
+      ],
+      "createdAt": "2026-09-14T08:30:00.000Z",
+      "updatedAt": "2026-09-15T06:30:00.000Z"
+    }
+  ],
+  "sessions": [
+    {
+      "tokenHash": "5bb7c58e9c7d8405eb57a5d2908075e36ea7ff7cabdc38baf944ad50648586d6",
+      "csrfHash": "58b1c589a9c0e114d0f0bf57bd4d2cf6e162734fe2856564ce51e864d126e832",
+      "accountId": "acct-producer-demo",
+      "createdAt": "2026-09-18T05:22:00.540Z",
+      "lastActivityAt": "2026-09-18T05:22:00.540Z",
+      "expiresAt": "2026-09-18T17:22:00.540Z"
+    },
+    {
+      "tokenHash": "77eab3212fe1d2fe548eeb207a5999f718e7b153b647f5b7a4abd4c7548afe12",
+      "csrfHash": "1653c48e96d6c702ea9d15e8d804a5f9a4bfb59934ba96b7097ca2f52755a532",
+      "accountId": "acct-collector-demo",
+      "createdAt": "2026-09-18T05:22:10.452Z",
+      "lastActivityAt": "2026-09-18T05:22:10.452Z",
+      "expiresAt": "2026-09-18T17:22:10.452Z"
+    },
+    {
+      "tokenHash": "90626e4bb7bab516645e86d2d8939b22224ff379232dcc617acbf9724aabbfd0",
+      "csrfHash": "976faa6a704f1ed319528a1bf98f705de0bcd083f795a510387d33850d2b31e0",
+      "accountId": "acct-admin",
+      "createdAt": "2026-09-18T05:22:10.525Z",
+      "lastActivityAt": "2026-09-18T05:22:10.525Z",
+      "expiresAt": "2026-09-18T17:22:10.525Z"
+    },
+    {
+      "tokenHash": "57dcb8b3ceb5af5cbb10309213950301f10ed2220143d60a3e5bf6d728004644",
+      "csrfHash": "8caaf298c8714f850f9c56fde9ca7f241938b13bbbd82187ceb06081b3c12bfa",
+      "accountId": "acct-producer-demo",
+      "createdAt": "2026-09-18T05:26:25.094Z",
+      "lastActivityAt": "2026-09-18T08:18:02.771Z",
+      "expiresAt": "2026-09-18T17:26:25.094Z"
+    },
+    {
+      "tokenHash": "643af654007bdd81e13bfc38e972647693270f9f87b29f4df175e10b32267ea1",
+      "csrfHash": "05d303a0ec92be2f29c16653aa7d941cf58f7f5f1f9ae2bc53b6c9752092f0b2",
+      "accountId": "acct-producer-demo",
+      "createdAt": "2026-09-18T05:36:12.331Z",
+      "lastActivityAt": "2026-09-18T05:36:12.331Z",
+      "expiresAt": "2026-09-18T17:36:12.331Z"
+    },
+    {
+      "tokenHash": "a8eb6462a155b3d3c0b623ff400d73fc4aa92a2ce7c10d64e73295baf7d55bbd",
+      "csrfHash": "ed4059dfd8cf1240e3c144aca619f845388fd0e68456150bfc7b08c2e6071505",
+      "accountId": "acct-producer-demo",
+      "createdAt": "2026-09-18T08:17:25.589Z",
+      "lastActivityAt": "2026-09-18T08:17:25.589Z",
+      "expiresAt": "2026-09-18T20:17:25.589Z"
+    }
+  ],
+  "accountTokens": [],
+  "chatConversations": [
+    {
+      "id": "conversation-support-producer",
+      "type": "ADMIN_SUPPORT",
+      "state": "OPEN",
+      "organizationAccountId": "acct-producer-demo",
+      "title": "Green Table Foods · Admin support",
+      "participantAccountIds": [
+        "acct-producer-demo"
+      ],
+      "createdAt": "2026-09-14T05:30:00.000Z",
+      "updatedAt": "2026-09-17T09:30:00.000Z",
+      "unreadCount": 0
+    },
+    {
+      "id": "conversation-pickup-active",
+      "type": "PICKUP",
+      "state": "OPEN",
+      "pickupId": "pickup-active",
+      "organizationAccountId": "acct-producer-demo",
+      "title": "Green Table Foods · Collection",
+      "participantAccountIds": [
+        "acct-producer-demo",
+        "acct-collector-demo"
+      ],
+      "createdAt": "2026-09-17T08:30:00.000Z",
+      "updatedAt": "2026-09-17T09:30:00.000Z",
+      "unreadCount": 0
+    }
+  ],
+  "chatParticipants": [
+    {
+      "conversationId": "conversation-support-producer",
+      "accountId": "acct-producer-demo",
+      "joinedAt": "2026-09-14T05:30:00.000Z",
+      "lastReadAt": "2026-09-18T08:19:06.143Z",
+      "lastReadMessageId": "message-support-admin"
+    },
+    {
+      "conversationId": "conversation-support-producer",
+      "accountId": "acct-admin",
+      "joinedAt": "2026-09-14T05:30:00.000Z",
+      "lastReadAt": "2026-09-17T09:30:00.000Z"
+    },
+    {
+      "conversationId": "conversation-pickup-active",
+      "accountId": "acct-producer-demo",
+      "joinedAt": "2026-09-17T08:30:00.000Z",
+      "lastReadAt": "2026-09-18T08:18:52.889Z",
+      "lastReadMessageId": "message-pickup-collector"
+    },
+    {
+      "conversationId": "conversation-pickup-active",
+      "accountId": "acct-collector-demo",
+      "joinedAt": "2026-09-17T08:30:00.000Z"
+    }
+  ],
+  "chatMessages": [
+    {
+      "id": "message-support-system",
+      "conversationId": "conversation-support-producer",
+      "kind": "SYSTEM",
+      "senderOrganizationName": "Bloom",
+      "senderDisplayName": "Bloom",
+      "text": "This is a private conversation between your organization and Bloom administrators.",
+      "attachmentIds": [],
+      "idempotencyKey": "support:presentation-producer",
+      "createdAt": "2026-09-14T05:30:00.000Z"
+    },
+    {
+      "id": "message-support-admin",
+      "conversationId": "conversation-support-producer",
+      "kind": "MESSAGE",
+      "senderAccountId": "acct-admin",
+      "senderOrganizationName": "Bloom",
+      "senderDisplayName": "Bloom Administrator",
+      "text": "Your pickup window looks good for today. Let us know if the kitchen schedule changes.",
+      "attachmentIds": [],
+      "idempotencyKey": "presentation-support-1",
+      "createdAt": "2026-09-17T09:30:00.000Z"
+    },
+    {
+      "id": "message-pickup-system",
+      "conversationId": "conversation-pickup-active",
+      "kind": "SYSTEM",
+      "senderOrganizationName": "Bloom",
+      "senderDisplayName": "Bloom",
+      "text": "This private conversation is shared by the producer and collector for this pickup.",
+      "attachmentIds": [],
+      "idempotencyKey": "pickup:presentation-active",
+      "createdAt": "2026-09-17T08:30:00.000Z"
+    },
+    {
+      "id": "message-pickup-collector",
+      "conversationId": "conversation-pickup-active",
+      "kind": "MESSAGE",
+      "senderAccountId": "acct-collector-demo",
+      "senderOrganizationName": "Coimbatore Recovery Collective",
+      "senderDisplayName": "Karthik Mani",
+      "text": "I can reach the service entrance around 4:30 PM. Please keep the containers labelled by meal.",
+      "attachmentIds": [],
+      "idempotencyKey": "presentation-pickup-1",
+      "createdAt": "2026-09-17T09:30:00.000Z"
+    }
+  ],
+  "chatAttachments": [],
+  "emailJobs": []
+}

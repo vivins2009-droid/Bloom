@@ -28,9 +28,12 @@ npm run dev
 
 Open [http://localhost:5175](http://localhost:5175). The API runs separately at [http://localhost:5002](http://localhost:5002).
 
-Local file mode creates these demo accounts:
+Local file mode boots a separate presentation dataset with populated producer, collector, and administrator workspaces. Changes made while presenting persist in `apps/api/data/presentation.json`; the existing `dev.json` state is left untouched.
+
+The presentation dataset uses these demo accounts:
 
 - **Food Waste Producer:** access code `FWP-DEMO`, passphrase `bloom-producer`.
+- **Food Waste Producer:** access code `FWP-SUNRISE`, passphrase `bloom-sunrise`.
 - **Food Collector:** access code `FCL-DEMO`, passphrase `bloom-recovery`.
 - **Administrator:** access code `ADMIN-BLOOM`, passphrase `bloom-admin`.
 

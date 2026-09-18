@@ -64,10 +64,15 @@ describe('admin operations API', () => {
     expect(approved.body.accessCode).toMatch(/^FWP-/);
     const login = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ accessCode: approved.body.accessCode, passphrase: approved.body.passphrase }) });
     expect(login.body.firstLogin).toBe(true);
+    expect(login.body.organizationTypeName).toBe('Test producer');
     const changed = await request('/api/auth/change-passphrase', { method: 'POST', headers: { cookie: login.cookie }, body: JSON.stringify({ passphrase: 'new-private-passphrase' }) });
     expect(changed.body.firstLogin).toBe(false);
     const profile = await request('/api/account/profile', { method: 'PATCH', headers: { cookie: changed.cookie }, body: JSON.stringify({ displayName: 'Updated Operator' }) });
     expect(profile.body.displayName).toBe('Updated Operator');
+    expect(profile.body.organizationTypeName).toBe('Test producer');
+    await asAdmin(`/api/admin/organization-types/${producerTypeId}`, { method: 'PATCH', body: JSON.stringify({ name: 'Restaurant partner', active: false }) });
+    const refreshedProfile = await request('/api/auth/me', { headers: { cookie: changed.cookie } });
+    expect(refreshedProfile.body.organizationTypeName).toBe('Restaurant partner');
     const selfChanged = await request('/api/account/change-passphrase', { method: 'POST', headers: { cookie: changed.cookie }, body: JSON.stringify({ currentPassphrase: 'new-private-passphrase', newPassphrase: 'another-private-passphrase' }) });
     expect(selfChanged.response.status).toBe(200);
     const nameRequest = await request('/api/account/organization-name-request', { method: 'POST', headers: { cookie: selfChanged.cookie }, body: JSON.stringify({ requestedName: 'Updated Community Kitchen', reason: 'Registered name changed' }) });
@@ -131,8 +136,8 @@ describe('admin operations API', () => {
   it('constrains pickup overrides and records their reasons', async () => {
     const login = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ accessCode: 'FWP-DEMO', passphrase: 'bloom-producer' }) });
     const headers = { cookie: login.cookie };
-    const log = await request('/api/waste-logs', { method: 'POST', headers, body: JSON.stringify({ date: '2027-01-19', mealIds: ['meal-tomato'], actualAttendance: 80, servingsPrepared: 90, leftoverKg: 4, reason: 'OVERPRODUCTION', suitableForCollection: true, notes: '' }) });
-    const secondLog = await request('/api/waste-logs', { method: 'POST', headers, body: JSON.stringify({ date: '2027-01-19', mealIds: ['meal-sambar'], actualAttendance: 30, servingsPrepared: 34, leftoverKg: 1, reason: 'LOW_ATTENDANCE', suitableForCollection: false, notes: '' }) });
+    const log = await request('/api/waste-logs', { method: 'POST', headers, body: JSON.stringify({ recordedAt: '2027-01-19T12:30:00.000Z', servicePeriod: 'LUNCH', wasteStage: 'OVERPRODUCTION', foodCategory: 'Rice', leftoverKg: 4, reason: 'OVERPRODUCTION', suitableForCollection: true, notes: '' }) });
+    const secondLog = await request('/api/waste-logs', { method: 'POST', headers, body: JSON.stringify({ recordedAt: '2027-01-19T20:00:00.000Z', servicePeriod: 'DINNER', wasteStage: 'PLATE_RETURN', foodCategory: 'Curry', leftoverKg: 1, reason: 'CUSTOMER_PREFERENCE', suitableForCollection: false, notes: '' }) });
     expect(secondLog.response.status).toBe(201);
     const start = new Date(Date.now() + 60_000).toISOString();
     const end = new Date(Date.now() + 3_600_000).toISOString();
@@ -153,7 +158,7 @@ describe('admin operations API', () => {
     const secondCollector = await asAdmin('/api/admin/accounts', { method: 'POST', body: JSON.stringify({ role: 'FOOD_COLLECTOR', organizationTypeId: collectorTypeId, displayName: 'Collector Two', organizationName: 'Recovery Route Two', contact: 'collector-two@example.org' }) });
     const collectorLogin = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ accessCode: collector.body.accessCode, passphrase: collector.body.passphrase }) });
     const secondCollectorLogin = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ accessCode: secondCollector.body.accessCode, passphrase: secondCollector.body.passphrase }) });
-    const log = await request('/api/waste-logs', { method: 'POST', headers: providerHeaders, body: JSON.stringify({ date: '2027-01-20', mealIds: ['meal-tomato'], actualAttendance: 80, servingsPrepared: 90, leftoverKg: 6, reason: 'OVERPRODUCTION', suitableForCollection: true, notes: '' }) });
+    const log = await request('/api/waste-logs', { method: 'POST', headers: providerHeaders, body: JSON.stringify({ recordedAt: '2027-01-20T12:30:00.000Z', servicePeriod: 'LUNCH', wasteStage: 'OVERPRODUCTION', foodCategory: 'Rice', leftoverKg: 6, reason: 'OVERPRODUCTION', suitableForCollection: true, notes: '' }) });
     const pickup = await request(`/api/waste-logs/${log.body.id}/publish-pickup`, { method: 'POST', headers: providerHeaders, body: JSON.stringify({ eligibleRoles: ['FOOD_COLLECTOR'], availableFrom: new Date(Date.now() - 60_000).toISOString(), pickupDeadline: new Date(Date.now() + 3_600_000).toISOString(), instructions: 'Ring the kitchen bell' }) });
     const attempts = await Promise.all([
       request(`/api/recovery/pickups/${pickup.body.id}/reserve`, { method: 'POST', headers: { cookie: collectorLogin.cookie } }),
